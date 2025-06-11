@@ -1,0 +1,13 @@
+{
+  "dependencies": [
+    "."
+  ],
+  "graphs": {
+    "supervisor": "./src/agent/supervisor.py:make_supervisor",
+    "rag_agent": "./src/agent/graph.py:make_graph"
+  },
+  "env": ".env",
+  "http": {
+    "app": "./src/agent/webapp.py:app"
+  }
+}

@@ -1,0 +1,419 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>RAG 知识库管理</title>
+    <style>
+      body {
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+          sans-serif;
+        max-width: 800px;
+        margin: 0 auto;
+        padding: 20px;
+        background-color: #f5f5f5;
+      }
+      .container {
+        background: white;
+        padding: 30px;
+        border-radius: 12px;
+        box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+      }
+      h1 {
+        color: #333;
+        text-align: center;
+        margin-bottom: 30px;
+      }
+      .section {
+        margin-bottom: 30px;
+        padding: 20px;
+        border: 1px solid #e0e0e0;
+        border-radius: 8px;
+      }
+      .section h2 {
+        color: #444;
+        margin-top: 0;
+        margin-bottom: 15px;
+      }
+      .form-group {
+        margin-bottom: 15px;
+      }
+      label {
+        display: block;
+        margin-bottom: 5px;
+        font-weight: 500;
+        color: #555;
+      }
+      input[type="file"],
+      input[type="text"],
+      textarea,
+      select {
+        width: 100%;
+        padding: 10px;
+        border: 1px solid #ddd;
+        border-radius: 4px;
+        font-size: 14px;
+        box-sizing: border-box;
+      }
+      textarea {
+        height: 100px;
+        resize: vertical;
+      }
+      button {
+        background-color: #007bff;
+        color: white;
+        padding: 12px 24px;
+        border: none;
+        border-radius: 4px;
+        cursor: pointer;
+        font-size: 14px;
+        margin-right: 10px;
+      }
+      button:hover {
+        background-color: #0056b3;
+      }
+      .result {
+        margin-top: 15px;
+        padding: 15px;
+        border-radius: 4px;
+        white-space: pre-wrap;
+        max-height: 200px;
+        overflow-y: auto;
+      }
+      .success {
+        background-color: #d4edda;
+        color: #155724;
+        border: 1px solid #c3e6cb;
+      }
+      .error {
+        background-color: #f8d7da;
+        color: #721c24;
+        border: 1px solid #f5c6cb;
+      }
+      .info {
+        background-color: #d1ecf1;
+        color: #0c5460;
+        border: 1px solid #bee5eb;
+      }
+      .loading {
+        display: none;
+        color: #007bff;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <h1>RAG 知识库管理系统</h1>
+
+      <!-- 文件上传部分 -->
+      <div class="section">
+        <h2>📁 文件上传</h2>
+        <form id="fileUploadForm">
+          <div class="form-group">
+            <label for="fileInput"
+              >选择文件 (支持: .txt, .md, .csv, .json, .py, .js, .html,
+              .xml):</label
+            >
+            <input
+              type="file"
+              id="fileInput"
+              name="file"
+              accept=".txt,.md,.csv,.json,.py,.js,.html,.xml"
+              required
+            />
+          </div>
+          <div class="form-group">
+            <label for="fileDescription">文件描述 (可选):</label>
+            <input
+              type="text"
+              id="fileDescription"
+              name="description"
+              placeholder="描述这个文件的内容..."
+            />
+          </div>
+          <button type="submit">上传文件</button>
+          <span class="loading" id="fileLoading">上传中...</span>
+        </form>
+        <div id="fileResult" class="result" style="display: none"></div>
+      </div>
+
+      <!-- 多文件上传部分 -->
+      <div class="section">
+        <h2>📚 批量文件上传</h2>
+        <form id="multiFileUploadForm">
+          <div class="form-group">
+            <label for="multiFileInput">选择多个文件:</label>
+            <input
+              type="file"
+              id="multiFileInput"
+              name="files"
+              multiple
+              accept=".txt,.md,.csv,.json,.py,.js,.html,.xml"
+              required
+            />
+          </div>
+          <div class="form-group">
+            <label for="multiFileDescription">批量描述 (可选):</label>
+            <input
+              type="text"
+              id="multiFileDescription"
+              name="description"
+              placeholder="描述这批文件的内容..."
+            />
+          </div>
+          <button type="submit">批量上传</button>
+          <span class="loading" id="multiFileLoading">上传中...</span>
+        </form>
+        <div id="multiFileResult" class="result" style="display: none"></div>
+      </div>
+
+      <!-- 文本内容上传部分 -->
+      <div class="section">
+        <h2>📝 文本内容上传</h2>
+        <form id="textUploadForm">
+          <div class="form-group">
+            <label for="textTitle">标题 (可选):</label>
+            <input
+              type="text"
+              id="textTitle"
+              name="title"
+              placeholder="给这段文本起个标题..."
+            />
+          </div>
+          <div class="form-group">
+            <label for="textDescription">描述 (可选):</label>
+            <input
+              type="text"
+              id="textDescription"
+              name="description"
+              placeholder="描述这段文本的内容..."
+            />
+          </div>
+          <div class="form-group">
+            <label for="textContent">文本内容:</label>
+            <textarea
+              id="textContent"
+              name="content"
+              placeholder="在这里输入要添加到知识库的文本内容..."
+              required
+            ></textarea>
+          </div>
+          <button type="submit">添加文本</button>
+          <span class="loading" id="textLoading">添加中...</span>
+        </form>
+        <div id="textResult" class="result" style="display: none"></div>
+      </div>
+
+      <!-- 知识库查询部分 -->
+      <div class="section">
+        <h2>🔍 知识库查询</h2>
+        <form id="queryForm">
+          <div class="form-group">
+            <label for="queryInput">输入问题:</label>
+            <input
+              type="text"
+              id="queryInput"
+              name="query"
+              placeholder="输入你想查询的问题..."
+              required
+            />
+          </div>
+          <div class="form-group">
+            <label for="searchMode">搜索模式:</label>
+            <select id="searchMode" name="search_mode">
+              <option value="mix">混合模式 (推荐)</option>
+              <option value="local">本地搜索</option>
+              <option value="global">全局搜索</option>
+              <option value="hybrid">混合搜索</option>
+              <option value="naive">简单搜索</option>
+            </select>
+          </div>
+          <button type="submit">查询</button>
+          <span class="loading" id="queryLoading">查询中...</span>
+        </form>
+        <div id="queryResult" class="result" style="display: none"></div>
+      </div>
+
+      <!-- 系统状态部分 -->
+      <div class="section">
+        <h2>📊 系统状态</h2>
+        <button onclick="checkHealth()">检查系统状态</button>
+        <span class="loading" id="healthLoading">检查中...</span>
+        <div id="healthResult" class="result" style="display: none"></div>
+      </div>
+    </div>
+
+    <script>
+      // 文件上传
+      document
+        .getElementById("fileUploadForm")
+        .addEventListener("submit", async (e) => {
+          e.preventDefault();
+
+          const loading = document.getElementById("fileLoading");
+          const result = document.getElementById("fileResult");
+
+          loading.style.display = "inline";
+          result.style.display = "none";
+
+          try {
+            const formData = new FormData(e.target);
+            const response = await fetch("/upload-file", {
+              method: "POST",
+              body: formData,
+            });
+
+            const data = await response.json();
+
+            result.textContent = JSON.stringify(data, null, 2);
+            result.className = response.ok ? "result success" : "result error";
+            result.style.display = "block";
+
+            if (response.ok) {
+              e.target.reset();
+            }
+          } catch (error) {
+            result.textContent = `错误: ${error.message}`;
+            result.className = "result error";
+            result.style.display = "block";
+          }
+
+          loading.style.display = "none";
+        });
+
+      // 多文件上传
+      document
+        .getElementById("multiFileUploadForm")
+        .addEventListener("submit", async (e) => {
+          e.preventDefault();
+
+          const loading = document.getElementById("multiFileLoading");
+          const result = document.getElementById("multiFileResult");
+
+          loading.style.display = "inline";
+          result.style.display = "none";
+
+          try {
+            const formData = new FormData(e.target);
+            const response = await fetch("/upload-multiple-files", {
+              method: "POST",
+              body: formData,
+            });
+
+            const data = await response.json();
+
+            result.textContent = JSON.stringify(data, null, 2);
+            result.className = response.ok ? "result success" : "result error";
+            result.style.display = "block";
+
+            if (response.ok) {
+              e.target.reset();
+            }
+          } catch (error) {
+            result.textContent = `错误: ${error.message}`;
+            result.className = "result error";
+            result.style.display = "block";
+          }
+
+          loading.style.display = "none";
+        });
+
+      // 文本上传
+      document
+        .getElementById("textUploadForm")
+        .addEventListener("submit", async (e) => {
+          e.preventDefault();
+
+          const loading = document.getElementById("textLoading");
+          const result = document.getElementById("textResult");
+
+          loading.style.display = "inline";
+          result.style.display = "none";
+
+          try {
+            const formData = new FormData(e.target);
+            const response = await fetch("/upload-text", {
+              method: "POST",
+              body: formData,
+            });
+
+            const data = await response.json();
+
+            result.textContent = JSON.stringify(data, null, 2);
+            result.className = response.ok ? "result success" : "result error";
+            result.style.display = "block";
+
+            if (response.ok) {
+              e.target.reset();
+            }
+          } catch (error) {
+            result.textContent = `错误: ${error.message}`;
+            result.className = "result error";
+            result.style.display = "block";
+          }
+
+          loading.style.display = "none";
+        });
+
+      // 知识库查询
+      document
+        .getElementById("queryForm")
+        .addEventListener("submit", async (e) => {
+          e.preventDefault();
+
+          const loading = document.getElementById("queryLoading");
+          const result = document.getElementById("queryResult");
+
+          loading.style.display = "inline";
+          result.style.display = "none";
+
+          try {
+            const formData = new FormData(e.target);
+            const response = await fetch("/query", {
+              method: "POST",
+              body: formData,
+            });
+
+            const data = await response.json();
+
+            result.textContent = JSON.stringify(data, null, 2);
+            result.className = response.ok ? "result success" : "result error";
+            result.style.display = "block";
+          } catch (error) {
+            result.textContent = `错误: ${error.message}`;
+            result.className = "result error";
+            result.style.display = "block";
+          }
+
+          loading.style.display = "none";
+        });
+
+      // 系统健康检查
+      async function checkHealth() {
+        const loading = document.getElementById("healthLoading");
+        const result = document.getElementById("healthResult");
+
+        loading.style.display = "inline";
+        result.style.display = "none";
+
+        try {
+          const response = await fetch("/health");
+          const data = await response.json();
+
+          result.textContent = JSON.stringify(data, null, 2);
+          result.className = response.ok ? "result info" : "result error";
+          result.style.display = "block";
+        } catch (error) {
+          result.textContent = `错误: ${error.message}`;
+          result.className = "result error";
+          result.style.display = "block";
+        }
+
+        loading.style.display = "none";
+      }
+
+      // 页面加载完成后自动检查系统状态
+      window.addEventListener("load", checkHealth);
+    </script>
+  </body>
+</html>

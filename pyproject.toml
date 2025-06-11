@@ -1,0 +1,72 @@
+[project]
+name = "agent"
+version = "0.0.1"
+readme = "README.md"
+license = { text = "MIT" }
+requires-python = ">=3.11"
+dependencies = [
+    "langchain-mcp-adapters>=0.1.2",
+    "langchain[google-genai]>=0.3.25",
+    "langgraph>=0.4.7",
+    "langgraph-api>=0.2.34",
+    "langgraph-swarm>=0.0.11",
+    "python-dotenv>=1.0.1",
+    "langmem>=0.0.27",
+    "langgraph-supervisor>=0.0.26",
+    "langchain-community>=0.3.21",
+    "nest-asyncio>=1.6.0",
+    "sentence-transformers>=4.1.0",
+    "chromadb>=1.0.12",
+    "fastapi-mcp>=0.3.4",
+]
+
+
+[project.optional-dependencies]
+dev = ["mypy>=1.11.1", "ruff>=0.6.1"]
+
+[build-system]
+requires = ["setuptools>=73.0.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools]
+packages = ["langgraph.templates.agent", "agent"]
+[tool.setuptools.package-dir]
+"langgraph.templates.agent" = "src/agent"
+"agent" = "src/agent"
+
+
+[tool.setuptools.package-data]
+"*" = ["py.typed"]
+
+[tool.ruff]
+lint.select = [
+    "E",    # pycodestyle
+    "F",    # pyflakes
+    "I",    # isort
+    "D",    # pydocstyle
+    "D401", # First line should be in imperative mood
+    "T201",
+    "UP",
+]
+lint.ignore = [
+    "UP006",
+    "UP007",
+    # We actually do want to import from typing_extensions
+    "UP035",
+    # Relax the convention by _not_ requiring documentation for every function parameter.
+    "D417",
+    "E501",
+]
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["D", "UP"]
+[tool.ruff.lint.pydocstyle]
+convention = "google"
+
+[tool.uv]
+dev-dependencies = [
+    "langgraph-cli[inmem]>=0.2.10",
+    "anyio>=4.7.0",
+    "mypy>=1.13.0",
+    "pytest>=8.3.5",
+    "ruff>=0.8.2",
+]
