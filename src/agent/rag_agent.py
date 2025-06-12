@@ -1,14 +1,11 @@
 """LangGraph agent with RAG tools."""
-import asyncio
 from typing import Literal
 
 from langchain.chat_models import init_chat_model
 from langgraph.constants import END, START
 from langgraph.graph import MessagesState, StateGraph
 from langgraph.graph.graph import CompiledGraph
-from langgraph.prebuilt import ToolNode, create_react_agent, tools_condition
-
-from langchain_mcp_adapters.client import MultiServerMCPClient
+from langgraph.prebuilt import ToolNode, tools_condition
 from pydantic import BaseModel, Field
 
 from src.agent.prompt import GENERATE_PROMPT, GRADE_PROMPT, REWRITE_PROMPT
@@ -28,8 +25,6 @@ async def generate_query_or_respond(state: MessagesState):
         .bind_tools(retriever_tool).invoke(state["messages"])
     )
     return {"messages": [response]}
-
-
 
 
 class GradeDocuments(BaseModel):
@@ -65,7 +60,6 @@ def grade_documents(
         return "rewrite_question"
 
 
-
 def rewrite_question(state: MessagesState):
     """Rewrite the original user question."""
     messages = state["messages"]
@@ -74,6 +68,7 @@ def rewrite_question(state: MessagesState):
     response = response_model.invoke([{"role": "user", "content": prompt}])
     return {"messages": [{"role": "user", "content": response.content}]}
 
+
 def generate_answer(state: MessagesState):
     """Generate an answer."""
     question = state["messages"][0].content
@@ -81,9 +76,6 @@ def generate_answer(state: MessagesState):
     prompt = GENERATE_PROMPT.format(question=question, context=context)
     response = response_model.invoke([{"role": "user", "content": prompt}])
     return {"messages": [response]}
-
-
-
 
 
 async def make_graph() -> CompiledGraph:

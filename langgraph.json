@@ -3,8 +3,9 @@
     "."
   ],
   "graphs": {
-    "lesson_planner": "./src/agent/lesson_plan_workflow.py:build_workflow",
-    "rag_agent": "./src/agent/rag_agent.py:make_graph"
+    "lesson_planner": "./src/agent/lesson_plan_workflow.py:build_plan_workflow",
+    "rag_agent": "./src/agent/rag_agent.py:make_graph",
+    "quiz_generator": "./src/agent/quiz_generator.py:build_quiz_workflow"
   },
   "env": ".env",
   "http": {
