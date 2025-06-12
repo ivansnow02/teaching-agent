@@ -1,7 +1,6 @@
 # main.py
 import contextlib
 from fastapi import FastAPI
-from src.agent.mcp import rag_tools
 
 
 app = FastAPI()

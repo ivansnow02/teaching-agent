@@ -3,8 +3,8 @@
     "."
   ],
   "graphs": {
-    "supervisor": "./src/agent/supervisor.py:make_supervisor",
-    "rag_agent": "./src/agent/graph.py:make_graph"
+    "lesson_planner": "./src/agent/lesson_plan_workflow.py:build_workflow",
+    "rag_agent": "./src/agent/rag_agent.py:make_graph"
   },
   "env": ".env",
   "http": {

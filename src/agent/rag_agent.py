@@ -11,37 +11,25 @@ from langgraph.prebuilt import ToolNode, create_react_agent, tools_condition
 from langchain_mcp_adapters.client import MultiServerMCPClient
 from pydantic import BaseModel, Field
 
-client = MultiServerMCPClient(
-    {
-        "rag": {
-            "command": "uv",
-            "args": ["run", "src/agent/mcp/rag_tools.py"],
-            "transport": "stdio"
-        }
-    }
-)
+from src.agent.prompt import GENERATE_PROMPT, GRADE_PROMPT, REWRITE_PROMPT
+from src.agent.tools import rag_client
+
 #         search_mode: Search mode - "default", "naive", "local", "global", "hybrid", "mix"
-response_model = init_chat_model("google_genai:gemini-2.5-flash-preview-05-20", temperature=0)
+response_model = init_chat_model("google_genai:gemini-2.0-flash", temperature=0)
 
 
 async def generate_query_or_respond(state: MessagesState):
     """Call the model to generate a response based on the current state. Given
     the question, it will decide to retrieve using the retriever tool, or simply respond to the user.
     """
-    retriever_tool = await client.get_tools()
+    retriever_tool = await rag_client.get_tools()
     response = (
         response_model
         .bind_tools(retriever_tool).invoke(state["messages"])
     )
     return {"messages": [response]}
 
-GRADE_PROMPT = (
-    "You are a grader assessing relevance of a retrieved document to a user question. \n "
-    "Here is the retrieved document: \n\n {context} \n\n"
-    "Here is the user question: {question} \n"
-    "If the document contains keyword(s) or semantic meaning related to the user question, grade it as relevant. \n"
-    "Give a binary score 'yes' or 'no' score to indicate whether the document is relevant to the question."
-)
+
 
 
 class GradeDocuments(BaseModel):
@@ -76,14 +64,6 @@ def grade_documents(
     else:
         return "rewrite_question"
 
-REWRITE_PROMPT = (
-    "Look at the input and try to reason about the underlying semantic intent / meaning.\n"
-    "Here is the initial question:"
-    "\n ------- \n"
-    "{question}"
-    "\n ------- \n"
-    "Formulate an improved question:"
-)
 
 
 def rewrite_question(state: MessagesState):
@@ -93,16 +73,6 @@ def rewrite_question(state: MessagesState):
     prompt = REWRITE_PROMPT.format(question=question)
     response = response_model.invoke([{"role": "user", "content": prompt}])
     return {"messages": [{"role": "user", "content": response.content}]}
-
-GENERATE_PROMPT = (
-    "You are an assistant for question-answering tasks. "
-    "Use the following pieces of retrieved context to answer the question. "
-    "If you don't know the answer, just say that you don't know. "
-    "Use three sentences maximum and keep the answer concise.\n"
-    "Question: {question} \n"
-    "Context: {context}"
-)
-
 
 def generate_answer(state: MessagesState):
     """Generate an answer."""
@@ -118,7 +88,7 @@ def generate_answer(state: MessagesState):
 
 async def make_graph() -> CompiledGraph:
     """Run the graph."""
-    retriever_tool = await client.get_tools()
+    retriever_tool = await rag_client.get_tools()
     workflow = StateGraph(MessagesState)
 
     # Define the nodes we will cycle between
@@ -154,6 +124,3 @@ async def make_graph() -> CompiledGraph:
     graph = workflow.compile(name="rag_agent")
 
     return graph
-
-
-
