@@ -1,29 +1,39 @@
 """LangGraph agent with RAG tools."""
-from typing import Literal
+from typing import Literal, TypedDict
 
 from langchain.chat_models import init_chat_model
+from langchain_core.rate_limiters import InMemoryRateLimiter
 from langgraph.constants import END, START
 from langgraph.graph import MessagesState, StateGraph
 from langgraph.graph.graph import CompiledGraph
-from langgraph.prebuilt import ToolNode, tools_condition
+from langgraph.prebuilt import ToolNode
 from pydantic import BaseModel, Field
 
 from src.agent.prompt import GENERATE_PROMPT, GRADE_PROMPT, REWRITE_PROMPT
-from src.agent.tools import rag_client
+from src.agent.tools import get_rag_tools
 
+rate_limiter = InMemoryRateLimiter(
+    requests_per_second=0.25,  # <-- Super slow! We can only make a request once every 10 seconds!!
+    check_every_n_seconds=0.1,  # Wake up every 100 ms to check whether allowed to make a request,
+    max_bucket_size=10,  # Controls the maximum burst size.
+)
 #         search_mode: Search mode - "default", "naive", "local", "global", "hybrid", "mix"
-response_model = init_chat_model("google_genai:gemini-2.0-flash", temperature=0)
+response_model = init_chat_model("google_genai:gemini-2.0-flash-lite", temperature=0, rate_limiter=rate_limiter)
 
 
-async def generate_query_or_respond(state: MessagesState):
+class ConfigSchema(TypedDict):
+    user_id: str
+
+
+async def generate_query_or_respond(state: MessagesState, config):
     """Call the model to generate a response based on the current state. Given
     the question, it will decide to retrieve using the retriever tool, or simply respond to the user.
     """
-    retriever_tool = await rag_client.get_tools()
-    response = (
-        response_model
-        .bind_tools(retriever_tool).invoke(state["messages"])
-    )
+    user_id = config.get("configurable", {}).get("user_id", None)
+    if user_id is None:
+        raise ValueError("User ID must be provided in the config.")
+    retriever_tool = await get_rag_tools(user_id)
+    response = await response_model.bind_tools(retriever_tool).ainvoke(state["messages"])
     return {"messages": [response]}
 
 
@@ -78,30 +88,36 @@ def generate_answer(state: MessagesState):
     return {"messages": [response]}
 
 
+async def retrieve_documents(state: MessagesState, config):
+    """Retrieve documents using the RAG tool."""
+    user_id = config.get("configurable", {}).get("user_id", None)
+
+    if user_id is None:
+        raise ValueError("User ID must be provided in the config.")
+
+    retrieve_tools = await get_rag_tools(user_id)
+
+    tool_node = ToolNode(retrieve_tools)
+
+    result = await tool_node.ainvoke(state)
+
+    return result
+
+
 async def make_graph() -> CompiledGraph:
     """Run the graph."""
-    retriever_tool = await rag_client.get_tools()
-    workflow = StateGraph(MessagesState)
+    workflow = StateGraph(MessagesState, ConfigSchema)
 
     # Define the nodes we will cycle between
     workflow.add_node(generate_query_or_respond)
-    workflow.add_node("retrieve", ToolNode(retriever_tool))
+    workflow.add_node("retrieve", retrieve_documents)
     workflow.add_node(rewrite_question)
     workflow.add_node(generate_answer)
 
     workflow.add_edge(START, "generate_query_or_respond")
 
     # Decide whether to retrieve
-    workflow.add_conditional_edges(
-        "generate_query_or_respond",
-        # Assess LLM decision (call `retriever_tool` tool or respond to the user)
-        tools_condition,
-        {
-            # Translate the condition outputs to nodes in our graph
-            "tools": "retrieve",
-            END    : END,
-        },
-    )
+    workflow.add_edge("generate_query_or_respond", "retrieve")
 
     # Edges taken after the `action` node is called.
     workflow.add_conditional_edges(

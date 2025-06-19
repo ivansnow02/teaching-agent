@@ -1,17 +1,19 @@
-from typing import Literal
+import argparse
+import logging
+import os
 
 import httpx
-import asyncio
 from mcp.server.fastmcp import FastMCP
-from pydantic import BaseModel, field_validator
-from starlette.applications import Starlette
-from starlette.routing import Mount
+
+# ---
+# 全局变量来存储 RAG URL 和 Authorization Token
+# 默认值
+RAG_URL = "http://localhost:9621/api"
+USER_ID: str = ""
+# ---
 
 mcp = FastMCP("Light RAG", "0.1.0")
 
-RAG_URL = "http://localhost:9621"
-
-# {"mode":"global","response_type":"Multiple Paragraphs","top_k":10,"max_token_for_text_unit":4000,"max_token_for_global_context":4000,"max_token_for_local_context":4000,"only_need_context":false,"only_need_prompt":false,"stream":true,"history_turns":3,"hl_keywords":[],"ll_keywords":[],"user_prompt":"","query":"大概讲了什么"}
 async def query_knowledge_base(query: str, search_mode: str = "mix") -> str:
     """Query the RAG knowledge base to retrieve relevant information.
 
@@ -42,7 +44,8 @@ async def query_knowledge_base(query: str, search_mode: str = "mix") -> str:
 
     try:
         async with httpx.AsyncClient(timeout=30.0) as client:
-            response = await client.post(f"{RAG_URL}/query", json=body)
+            # 将 headers 传递给 httpx 请求
+            response = await client.post(f"{RAG_URL}/query/{USER_ID}", json=body)
             response.raise_for_status()
             return response.text
     except httpx.HTTPStatusError as e:
@@ -133,7 +136,35 @@ async def query_naive_retrieval(query: str) -> str:
     return await query_knowledge_base(query, "naive")
 
 
-
 if __name__ == "__main__":
-    # Initialize and run the server
+    parser = argparse.ArgumentParser(description="Run the Light RAG MCP server.")
+    parser.add_argument(
+        "--user-id",
+        type=str,
+        default=None,
+        help="User id for the RAG service."
+    )
+    parser.add_argument(
+        "--rag-url",
+        type=str,
+        default=None,  # 将默认值改为 None，以便优先使用环境变量或命令行参数
+        help="URL of the RAG service. Defaults to http://localhost:9621/api if not set. Can also be set via RAG_URL environment variable."
+    )
+
+    args = parser.parse_args()
+
+    # ---
+    # 在这里设置全局变量
+    # 优先使用命令行参数，其次是环境变量，最后是硬编码的默认值
+    if args.rag_url:
+        RAG_URL = args.rag_url
+    else:
+        RAG_URL = os.environ.get("RAG_URL", "http://localhost:9621/api")
+
+    if args.user_id:
+        USER_ID = args.user_id
+    else:
+        logging.error(
+            "User ID must be provided either as a command line argument or through the USER_ID environment variable.")
+
     mcp.run(transport='stdio')

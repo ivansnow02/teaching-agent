@@ -1,16 +1,29 @@
+import json
 import logging
+import re
 from typing import Dict, List, TypedDict
 
 from langchain.chat_models import init_chat_model
+from langchain_core.rate_limiters import InMemoryRateLimiter
+from langgraph.constants import END
 from langgraph.graph import StateGraph
 from langgraph.graph.graph import CompiledGraph
 from pydantic import BaseModel, Field
 
 from src.agent import quiz_generator, rag_agent
-from src.agent.prompt import SYLLABUS_PARSE_PROMPT
+from src.agent.prompt import FINAL_PLAN_COMPILER_PROMPT, SYLLABUS_PARSE_PROMPT, TIME_ALLOCATOR_PROMPT
+from src.agent.tools import count_words
 
-llm = init_chat_model("google_genai:gemini-2.0-flash")
+rate_limiter = InMemoryRateLimiter(
+    requests_per_second=0.25,  # <-- Super slow! We can only make a request once every 10 seconds!!
+    check_every_n_seconds=0.1,  # Wake up every 100 ms to check whether allowed to make a request,
+    max_bucket_size=10,  # Controls the maximum burst size.
+)
+llm = init_chat_model("google_genai:gemini-2.5-flash-lite-preview-06-17", rate_limiter=rate_limiter)
 
+
+class ConfigSchema(TypedDict):
+    user_id: str
 
 class Chapter(BaseModel):
     """定义单个章节的结构"""
@@ -77,7 +90,7 @@ def parse_syllabus(state: LessonPlanState) -> Dict:
     }
 
 
-async def generate_chapter_content(state: LessonPlanState) -> Dict:
+async def generate_chapter_content(state: LessonPlanState, config) -> Dict:
     """
     为当前章节生成内容。
     """
@@ -85,30 +98,46 @@ async def generate_chapter_content(state: LessonPlanState) -> Dict:
     idx = state['current_chapter_index']
     chapter_info = state['parsed_syllabus'][idx]
     chapter_title = chapter_info['chapter_title']
+    knowledge_points = chapter_info['knowledge_points']
 
-    logging.info(f"Generating content for chapter: {chapter_title}")
+    logging.info(f"Generating content for chapter {idx}: {chapter_title}")
+    # 批量生成讲解
+    prompt = (
+        f"你是一位资深的课程内容撰写者。请为课程《{chapter_title}》"
+        f"中的以下知识点分别撰写一段核心讲解内容，"
+        "严格输出 JSON 数组，每个元素为字符串，每个字符串为对应知识点的讲解。"
+        "不要输出任何解释、注释或 Markdown 代码块标记。\n"
+        f"{knowledge_points}\n"
+        "示例输出：\n"
+        "[\"讲解1\", \"讲解2\", \"讲解3\"]\n"
+        "要求：\n"
+        "1. 内容精准、专业，面向大学生。\n"
+        "2. 直接开始讲解知识点，不要包含开场白、问候语或总结性文字。\n"
+        "3. 专注于讲解知识点本身，不要过多发散。\n"
+    )
+    rag_graph = await rag_agent.make_graph()
+    response = await rag_graph.ainvoke(
+        {"messages": [{"role": "user", "content": prompt}]},
+        config
+    )
+    explanations = response["messages"][-1].content
+    # 假设 explanations 是 LLM 返回的字符串
+    print(f"Received explanations: {explanations}")
+    try:
+        explanations_list = json.loads(explanations)
+    except json.JSONDecodeError:
+        cleaned = re.sub(r"^```[a-zA-Z]*\n?|```$", "", explanations.strip())
+        explanations_list = json.loads(cleaned)
+    except Exception:
+        # 如果不是严格的 JSON，可以用 ast.literal_eval 或正则等方式兜底
+        import ast
+        explanations_list = ast.literal_eval(explanations)
 
-    # 生成知识点讲解
-    explanations = []
-    for point in chapter_info['knowledge_points']:
-        prompt = (
-            f"你是一位资深的课程内容撰写者。请为课程《{chapter_title}》"
-            f"中的知识点“{point}”撰写一段核心讲解内容。\n"
-            "要求如下：\n"
-            "1. 内容必须精准、专业，面向大学生。\n"
-            "2. 直接开始讲解知识点，不要包含任何开场白、问候语或总结性文字。\n"
-            "3. 专注于讲解这一个知识点本身，不要过多发散。\n"
-            # "4. 如果适合，可以提供一个简短的代码示例来说明。"
-        )
-        rag_graph = await rag_agent.make_graph()
-        response = await rag_graph.ainvoke({"messages": [
-            {
-                "role"   : "user",
-                "content": prompt,
-            }
-        ]})
-
-        explanations.append(response["messages"][-1].content)
+    # 然后用 explanations_list 替换原有 explanations 变量
+    for point, explanation in zip(chapter_info['knowledge_points'], explanations_list):
+        if not isinstance(explanation, str):
+            raise ValueError(f"Expected explanation for '{point}' to be a string, got {type(explanation)}")
+    explanations = explanations_list
 
     num_choice_questions = state['num_choice_questions']
     num_short_answer_questions = state['num_short_answer_questions']
@@ -130,9 +159,33 @@ async def generate_chapter_content(state: LessonPlanState) -> Dict:
         'num_short_answer_questions' : num_short_answer_questions,
         'num_true_or_false_questions': num_true_or_false_questions,
     }
-    quiz_result = await quiz_graph.ainvoke(quiz_state)
+    quiz_result = await quiz_graph.ainvoke(quiz_state, config)
 
-    # todo 计算时间分配
+    # 1. 准备用于分析的章节内容
+    content_for_analysis = (
+            f"章节标题: {chapter_title}\n\n"
+            "### 核心知识点讲解:\n" +
+            "\n".join(
+                f"- {point}: {explanation}"
+                for point, explanation in zip(chapter_info["knowledge_points"], explanations)
+            ) +
+            "\n\n### 配套练习题:\n" +
+            str(quiz_result["practice_exercises"]) +
+            "### 章节字数（非最终）：\n" +
+            str(count_words(content + str(quiz_result)))
+    )
+
+    # 2. 调用 LLM 进行时间分配
+    logging.info(f"Calculating time allocation for chapter: {chapter_title}")
+
+    # 让 LLM 输出结构化的 TimeAllocation 对象
+    time_llm = llm.with_structured_output(TimeAllocation)
+
+    time_allocation_result = await time_llm.ainvoke(
+        TIME_ALLOCATOR_PROMPT.format(chapter_content_for_analysis=content_for_analysis)
+    )
+
+    time_allocation_dict = time_allocation_result.model_dump()
 
     result = {
         'chapter_title': chapter_title,
@@ -143,18 +196,68 @@ async def generate_chapter_content(state: LessonPlanState) -> Dict:
             } for point, explanation in zip(chapter_info['knowledge_points'], explanations)
         ],
         'quiz'         : quiz_result["practice_exercises"],
+        'time_allocation': time_allocation_dict
     }
     current_results = state['chapter_results']
     current_results.append(result)
-    return {"chapter_results": current_results}
+    state['current_chapter_index'] += 1
+    return {
+        "chapter_results"      : current_results,
+        "current_chapter_index": state["current_chapter_index"]
+    }
 
+
+def decide_next_step(state: LessonPlanState) -> str:
+    if state['current_chapter_index'] < len(state['parsed_syllabus']):
+        return "continue_processing"
+    else:
+        return "finalize"
+
+
+async def finalize_plan(state: LessonPlanState) -> Dict:
+    """汇总所有章节的内容，生成最终的教案（md）。"""
+    chapter_results = state['chapter_results']
+    final_lesson_plan = "\n\n".join(
+        f"## {result['chapter_title']}\n\n"
+        f"### 知识点讲解:\n" +
+        "\n".join(
+            f"- {kp['knowledge_point']}: {kp['explation']}"
+            for kp in result['knowledge']
+        ) +
+        "\n\n### 练习题:\n" +
+        json.dumps(result['quiz'], ensure_ascii=False, indent=2) +  # 用 JSON 格式美化
+        "\n\n### 时间分配:\n" +
+        "\n".join(
+            f"- {activity['name']}: {activity['minutes']} 分钟"
+            for activity in result['time_allocation']['activities']
+        )
+        for result in chapter_results
+    )
+
+    final_llm = init_chat_model("google_genai:gemini-2.5-flash", rate_limiter=rate_limiter)
+
+    prompt = FINAL_PLAN_COMPILER_PROMPT + "\n\n" + final_lesson_plan
+
+    result = await final_llm.ainvoke(
+        [{"role": "user", "content": prompt}]
+    )
+
+    return {"final_lesson_plan": result.content}
 
 async def build_plan_workflow() -> CompiledGraph:
-    workflow = StateGraph(LessonPlanState)
+    workflow = StateGraph(LessonPlanState, ConfigSchema)
 
     workflow.add_node("parse_syllabus", parse_syllabus)
     workflow.set_entry_point("parse_syllabus")
     workflow.add_node("generate_chapter_content", generate_chapter_content)
     workflow.add_edge("parse_syllabus", "generate_chapter_content")
+    workflow.add_conditional_edges(
+        "generate_chapter_content",
+        decide_next_step,
+        {"continue_processing": "generate_chapter_content", "finalize": "finalize_plan"},
+    )
+    workflow.add_node("finalize_plan", finalize_plan)
+    workflow.add_edge("finalize_plan", END)
+
 
     return workflow.compile()
