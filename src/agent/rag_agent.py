@@ -29,6 +29,7 @@ async def generate_query_or_respond(state: MessagesState, config):
     """Call the model to generate a response based on the current state. Given
     the question, it will decide to retrieve using the retriever tool, or simply respond to the user.
     """
+    print("Generating query or responding...")
     user_id = config.get("configurable", {}).get("user_id", None)
     if user_id is None:
         raise ValueError("User ID must be provided in the config.")

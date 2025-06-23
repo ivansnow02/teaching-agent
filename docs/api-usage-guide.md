@@ -12,18 +12,45 @@
 直接：
 
 
-```bash
+#### LightRAG
+
+```powershell
+# 安装uv
+powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/install.ps1 | iex"
 
 # 使用uv
 uv venv
 
+# 激活虚拟环境
+# Linux/MacOS
+source venv/bin/activate
+# Windows powershell
+.\.venv\Scripts\Activate.ps1
+
 uv sync
 
+uv pip install -e .
 
-langgraph dev --allow-blocking
+uv pip install -r requirements.txt
+
+# 运行
+uv run lightrag\api\lightrag_multiuser_server.py
 ```
 
-### docker安装
+#### LLM
+
+```powershell
+uv venv
+
+.\.venv\Scripts\Activate.ps1
+
+uv sync
+
+langgraph dev --allow-blocking --no-reload
+
+```
+
+### docker安装(先不用)
 
 ```bash
 docker run -p 9621:9621 -v $(pwd)/data:/app/data lightrag:amd64
@@ -40,7 +67,11 @@ docker run \
 
 ### 使用之前
 
-先在`/documents/upload/{user_id}`端点上传相关文档，以便RAG代理可以访问这些文档进行问答。
+先在`/documents/upload/{user_id}`端点上传知识库，以便RAG代理可以访问这些文档进行问答。
+
+
+## 1. 课程规划器 (Lesson Planner)
+
 
 ### 创建Assistant
 
@@ -48,7 +79,7 @@ POST /assistants
 
 ```json
 {
-    "graph_id": "rag_agent", // 从rag_agent，quiz_generator或lesson_planner中选择
+    "graph_id": "lesson_planner", // 从rag_agent，quiz_generator或lesson_planner中选择
     "config": {
         "configurable":{
             "user_id": "用户唯一标识符"
@@ -78,24 +109,16 @@ POST /threads/{thread_id}/runs/stream
 {
     "assistant_id": "assistant_id", // assistant_id是上面创建的Assistant的ID
     "input": {
-        // 看下面
-    }
-}
-```
-
-#### 非流式输出
-
-## 1. 课程规划器 (Lesson Planner)
-
-### 创建课程计划
-
-```json
-  "input": {
     "raw_syllabus": "您的教学大纲内容...",
     "num_choice_questions": 5,
     "num_short_answer_questions": 3,
     "num_true_or_false_questions": 4
   }
+}
+```
+
+```json
+
 ```
 
 **响应示例**:
@@ -147,12 +170,7 @@ POST /threads/{thread_id}/runs/stream
 
 ```json
 "input": {
-  "messages": [
-    {
-      "role": "user",
-      "content": "面向对象编程的核心原则是什么？"
-    }
-  ]
+      "content": "tensorflow.js是什么"
 },
 
 ```
@@ -162,12 +180,84 @@ POST /threads/{thread_id}/runs/stream
 {
   "messages": [
     {
-      "role": "user",
-      "content": "面向对象编程的核心原则是什么？"
+      "content": "tensorflow.js是什么",
+      "additional_kwargs": {},
+      "response_metadata": {},
+      "type": "human",
+      "name": null,
+      "id": "6c8bf0e2-35a6-4f8a-b4f1-bb7b487e0d64",
+      "example": false
     },
     {
-      "role": "assistant",
-      "content": "面向对象编程(OOP)的核心原则包括：\n1. 封装(Encapsulation)：将数据和方法组合在一起...\n2. 继承(Inheritance)：允许类从其他类继承属性和方法...\n3. 多态(Polymorphism)：允许不同类的对象对同一消息做出不同的响应...\n4. 抽象(Abstraction)：隐藏复杂的实现细节..."
+      "content": "",
+      "additional_kwargs": {
+        "function_call": {
+          "name": "query_mix_retrieval",
+          "arguments": "{\"query\": \"tensorflow.js\\u662f\\u4ec0\\u4e48\"}"
+        }
+      },
+      "response_metadata": {
+        "finish_reason": "STOP",
+        "model_name": "gemini-2.0-flash-lite",
+        "safety_ratings": []
+      },
+      "type": "ai",
+      "name": null,
+      "id": "run--b0443709-befb-498a-9772-b7f4f95f5503",
+      "example": false,
+      "tool_calls": [
+        {
+          "name": "query_mix_retrieval",
+          "args": {
+            "query": "tensorflow.js是什么"
+          },
+          "id": "50ab6025-f99b-459d-b491-17f9bc00a92d",
+          "type": "tool_call"
+        }
+      ],
+      "invalid_tool_calls": [],
+      "usage_metadata": {
+        "input_tokens": 355,
+        "output_tokens": 11,
+        "total_tokens": 366,
+        "input_token_details": {
+          "cache_read": 0
+        }
+      }
+    },
+    {
+      "content": "{\"response\":\"TensorFlow.js 是一个用于机器学习开发的 JavaScript 库，它允许开发者在浏览器和 Node.js 环境中训练和部署机器学习模型。该库提供了 GPU 加速的数学运算能力，并需要内存管理来处理张量和变量。TensorFlow.js 支持低级构建模块和高级 Keras Layers API，使其能够满足不同层次的开发需求。\\n\\nGoogle 提供了 TensorFlow.js，这是其 JavaScript 语言版本的扩展解决方案。该库支持在浏览器端部署机器学习模型，并且与微信小程序有良好的集成。TensorFlow.js 能够加载所有 Python 可以加载的模型，并且在 Node.js 环境中可以直接调用 API，而在浏览器环境中则需要转换为浏览器支持的 JSON 格式。\\n\\nTensorFlow.js 的核心概念包括：\\n\\n*   **张量 (Tensor)**：这是 TensorFlow.js 中数据的中心数据单元，是一维或多维数组。\\n*   **变量 (Variable)**：用张量的值进行初始化，但其值是可变的，可以通过 `assign` 方法更新。\\n*   **操作 (Ops)**：用于操作张量的数据，返回新的张量，例如加法 (`add`)、减法 (`sub`)、乘法 (`mul`) 和平方 (`square`) 等。\\n\\n在 TensorFlow.js 中，可以使用两种方式创建机器学习模型：\\n\\n1.  **Layers API**：提供高级 API，可以像 Keras 一样构建神经网络，支持创建 sequential 模型或 functional 模型。\\n2.  **Core API**：提供低级构建模块，允许开发者通过直接的数学运算来构建模型。\\n\\nTensorFlow.js 还支持端侧机器学习，这有助于分担云端的计算压力并提高隐私性。此外，它还提供了如图像识别、语音识别、物体识别等一系列预训练模型。\\n\\n**References:**\\n[KG] cp07-样章示例-TensorFlow.js应用开发.docx\\n[DC] cp07-样章示例-TensorFlow.js应用开发.docx\\n[DC] cp07-样章示例-TensorFlow.js应用开发.docx\\n[DC] cp07-样章示例-TensorFlow.js应用开发.docx\\n[DC] cp07-样章示例-TensorFlow.js应用开发.docx\"}",
+      "additional_kwargs": {},
+      "response_metadata": {},
+      "type": "tool",
+      "name": "query_mix_retrieval",
+      "id": "010b2dca-0daa-4c6a-91af-7395052616c0",
+      "tool_call_id": "50ab6025-f99b-459d-b491-17f9bc00a92d",
+      "artifact": null,
+      "status": "success"
+    },
+    {
+      "content": "TensorFlow.js 是一个用于机器学习开发的 JavaScript 库。它允许开发者在浏览器和 Node.js 环境中训练和部署机器学习模型。该库由 Google 提供，支持 GPU 加速的数学运算。\n",
+      "additional_kwargs": {},
+      "response_metadata": {
+        "safety_ratings": [],
+        "finish_reason": "STOP",
+        "model_name": "gemini-2.0-flash-lite"
+      },
+      "type": "ai",
+      "name": null,
+      "id": "run--9ab9f1f6-d51d-42c7-abef-7ad13e20b65f",
+      "example": false,
+      "tool_calls": [],
+      "invalid_tool_calls": [],
+      "usage_metadata": {
+        "input_tokens": 589,
+        "output_tokens": 47,
+        "total_tokens": 636,
+        "input_token_details": {
+          "cache_read": 0
+        }
+      }
     }
   ]
 }
