@@ -37,7 +37,7 @@ uv pip install -r requirements.txt
 uv run lightrag\api\lightrag_multiuser_server.py
 ```
 
-#### LLM
+#### teaching_agent
 
 ```powershell
 uv venv
@@ -163,16 +163,45 @@ POST /threads/{thread_id}/runs/stream
 
 ## 2. RAG代理 (RAG Agent)
 
-### 提问
+### 创建Assistant
 
-
-**请求示例**:
+POST /assistants
 
 ```json
-"input": {
-      "content": "tensorflow.js是什么"
-},
+{
+    "graph_id": "rag_agent", // 从rag_agent，quiz_generator或lesson_planner中选择
+    "config": {
+        "configurable":{
+            "user_id": "用户唯一标识符"
+        }
+    }
+}
+```
 
+
+### 创建Thread
+
+POST /threads
+
+最简单的配置就是直接空就好了
+
+```json
+{}
+```
+
+### 创建Run
+
+#### 流式输出
+
+POST /threads/{thread_id}/runs/stream
+
+```json
+{
+    "assistant_id": "assistant_id", // assistant_id是上面创建的Assistant的ID
+    "input": {
+    "messages": "tensorflow.js是什么",
+  }
+}
 ```
 
 **响应示例**:
@@ -265,18 +294,47 @@ POST /threads/{thread_id}/runs/stream
 
 ## 3. 测验生成器 (Quiz Generator)
 
-### 生成测验
+### 创建Assistant
 
-
-**请求示例**:
+POST /assistants
 
 ```json
-"input": {
-  "content": "需要生成测验的内容...",
-  "num_choice_questions": 3,
-  "num_short_answer_questions": 2,
-  "num_true_or_false_questions": 2
-},
+{
+    "graph_id": "quiz_generator", // 从rag_agent，quiz_generator或lesson_planner中选择
+    "config": {
+        "configurable":{
+            "user_id": "用户唯一标识符"
+        }
+    }
+}
+```
+
+
+### 创建Thread
+
+POST /threads
+
+最简单的配置就是直接空就好了
+
+```json
+{}
+```
+
+### 创建Run
+
+#### 流式输出
+
+POST /threads/{thread_id}/runs/stream
+```json
+{
+    "assistant_id": "assistant_id", // assistant_id是上面创建的Assistant的ID
+    "input": {
+        "content": "需要生成测验的内容...",
+        "num_choice_questions": 3,
+        "num_short_answer_questions": 2,
+        "num_true_or_false_questions": 2
+    }
+}
 ```
 
 **响应示例**:
