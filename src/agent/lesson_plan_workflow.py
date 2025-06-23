@@ -23,7 +23,7 @@ llm = init_chat_model("google_genai:gemini-2.5-flash-lite-preview-06-17", rate_l
 
 
 class ConfigSchema(TypedDict):
-    user_id: str
+    course_id: str
 
 class Chapter(BaseModel):
     """定义单个章节的结构"""

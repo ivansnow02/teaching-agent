@@ -3,17 +3,17 @@ import logging
 from langchain_mcp_adapters.client import MultiServerMCPClient
 
 
-async def get_rag_tools(user_id: str = None):
+async def get_rag_tools(course_id: str = None):
     """
     获取 RAG 工具
     """
-    logging.info(f"Retrieving RAG tools for user_id: {user_id}")
+    logging.info(f"Retrieving RAG tools for user_id: {course_id}")
 
     rag_client = MultiServerMCPClient(
         {
             "rag": {
                 "command"  : "uv",
-                "args"     : ["run", "src/agent/mcp/rag_tools.py", "--user-id", f"{user_id}"],
+                "args": ["run", "src/agent/mcp/rag_tools.py", "--course-id", f"{course_id}"],
                 "transport": "stdio"
             }
         }

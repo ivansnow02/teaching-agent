@@ -17,7 +17,7 @@ llm = init_chat_model("google_genai:gemini-2.0-flash", rate_limiter=rate_limiter
 
 
 class ConfigSchema(TypedDict):
-    user_id: str
+    course_id: str
 
 class QuestionStem(BaseModel):
     """定义从内容中提取的单个问题题干"""

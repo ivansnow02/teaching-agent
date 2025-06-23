@@ -9,7 +9,7 @@ from mcp.server.fastmcp import FastMCP
 # 全局变量来存储 RAG URL 和 Authorization Token
 # 默认值
 RAG_URL = "http://localhost:9621/api"
-USER_ID: str = ""
+COURSE_ID: str = ""
 # ---
 
 mcp = FastMCP("Light RAG", "0.1.0")
@@ -45,7 +45,7 @@ async def query_knowledge_base(query: str, search_mode: str = "mix") -> str:
     try:
         async with httpx.AsyncClient(timeout=30.0) as client:
             # 将 headers 传递给 httpx 请求
-            response = await client.post(f"{RAG_URL}/query/{USER_ID}", json=body)
+            response = await client.post(f"{RAG_URL}/query/{COURSE_ID}", json=body)
             response.raise_for_status()
             return response.text
     except httpx.HTTPStatusError as e:
@@ -139,10 +139,10 @@ async def query_naive_retrieval(query: str) -> str:
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Run the Light RAG MCP server.")
     parser.add_argument(
-        "--user-id",
+        "--course-id",
         type=str,
         default=None,
-        help="User id for the RAG service."
+        help="Course id for the RAG service."
     )
     parser.add_argument(
         "--rag-url",
@@ -161,10 +161,10 @@ if __name__ == "__main__":
     else:
         RAG_URL = os.environ.get("RAG_URL", "http://localhost:9621/api")
 
-    if args.user_id:
-        USER_ID = args.user_id
+    if args.course_id:
+        COURSE_ID = args.course_id
     else:
         logging.error(
-            "User ID must be provided either as a command line argument or through the USER_ID environment variable.")
+            "User ID must be provided either as a command line argument or through the COURSE_ID environment variable.")
 
     mcp.run(transport='stdio')

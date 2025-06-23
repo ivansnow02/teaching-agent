@@ -22,7 +22,7 @@ response_model = init_chat_model("google_genai:gemini-2.0-flash-lite", temperatu
 
 
 class ConfigSchema(TypedDict):
-    user_id: str
+    course_id: str
 
 
 async def generate_query_or_respond(state: MessagesState, config):
