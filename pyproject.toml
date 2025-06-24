@@ -19,6 +19,7 @@ dependencies = [
     "chromadb>=1.0.12",
     "fastapi-mcp>=0.3.4",
     "notebook>=7.4.3",
+    "dashscope>=1.23.5",
 ]
 
 

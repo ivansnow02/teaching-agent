@@ -165,6 +165,6 @@ if __name__ == "__main__":
         COURSE_ID = args.course_id
     else:
         logging.error(
-            "User ID must be provided either as a command line argument or through the COURSE_ID environment variable.")
+            "COURSE ID must be provided either as a command line argument or through the COURSE_ID environment variable.")
 
     mcp.run(transport='stdio')

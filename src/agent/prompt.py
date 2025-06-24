@@ -26,6 +26,10 @@ GRADE_PROMPT = (
     "以下是用户的问题：{question}\n"
     "如果文档包含与用户问题相关的关键词或语义内容，请判定为相关。\n"
     "请用“yes”或“no”二元分数表示该文档是否与问题相关。"
+    "只返回如下 json："
+    "```json"
+    "{{\"relevant\": \"yes\"}} 或 {{\"relevant\": \"no\"}}"
+    "```"
 )
 
 SUPERVISOR_PROMPT = (

@@ -1,3 +1,5 @@
+import json
+import os
 from typing import Dict, List, Literal, TypedDict
 
 from langchain.chat_models import init_chat_model
@@ -13,7 +15,15 @@ rate_limiter = InMemoryRateLimiter(
     check_every_n_seconds=0.1,  # Wake up every 100 ms to check whether allowed to make a request,
     max_bucket_size=10,  # Controls the maximum burst size.
 )
-llm = init_chat_model("google_genai:gemini-2.0-flash", rate_limiter=rate_limiter)
+llm = init_chat_model(
+    model="qwen3-235b-a22b",
+    model_provider="openai",
+    extra_body={"enable_thinking": False},
+    temperature=0,
+    api_key=os.getenv("DASH_SCOPE_API_KEY", ""),
+    # rate_limiter=rate_limiter,
+    base_url=os.getenv("DASH_SCOPE_API_URL", "https://dashscope.aliyuncs.com/compatible-mode/v1"),
+)
 
 
 class ConfigSchema(TypedDict):
@@ -88,16 +98,47 @@ def create_quiz_stems(state: QuizState) -> Dict:
     num_short_answer_questions = state['num_short_answer_questions']
     num_true_or_false_questions = state['num_true_or_false_questions']
 
-    prompt = (
-        "请根据以下内容，分别生成选择题、简答题和是非题的题干。\n"
-        f"选择题数量：{num_choice_questions}\n"
-        f"简答题数量：{num_short_answer_questions}\n"
-        f"是非题数量：{num_true_or_false_questions}\n"
-        "输出格式为JSON，包含choice_questions、short_questions、true_or_false_questions三个字段，"
-        "每个字段是一个题干列表，每个题干包含question和knowledge_points。\n"
-        "---参考内容---\n"
-        f"{content}\n"
-    )
+    prompt = f"""你是一个出题机器人。根据以下内容，生成一个包含三种类型题干的 JSON 对象。
+
+### 参考内容
+---
+{content}
+---
+
+### 任务
+1.  生成 {num_choice_questions} 个选择题题干。
+2.  生成 {num_short_answer_questions} 个简答题题干。
+3.  生成 {num_true_or_false_questions} 个是非题题干。
+4.  对于每个题干，提取相关的知识点。`knowledge_points` 字段必须是一个字符串列表。
+
+### JSON 输出格式
+你必须严格按照以下 JSON 结构输出。顶层元素必须是一个 JSON 对象，而不是列表。
+```json
+{{
+  "choice_questions": [
+    {{
+      "question": "<字符串 - 选择题题干>",
+      "knowledge_points": ["<字符串 - 知识点A>", "<字符串 - 知识点B>"]
+    }}
+  ],
+  "short_questions": [
+    {{
+      "question": "<字符串 - 简答题题干>",
+      "knowledge_points": ["<字符串 - 知识点C>"]
+    }}
+  ],
+  "true_or_false_questions": [
+    {{
+      "question": "<字符串 - 是非题题干>",
+      "knowledge_points": ["<字符串 - 知识点D>"]
+    }}
+  ]
+}}
+```
+### 参考内容
+{content}
+请严格按照上述指令和格式，生成所需的 json 输出。 """
+
 
     # 定义批量结构
     class AllStems(BaseModel):
@@ -169,13 +210,17 @@ async def generate_all_answers(state: QuizState, config) -> Dict:
             )
             rag_graph = await rag_agent.make_graph()
             response = await rag_graph.ainvoke({"messages": [
-                {"role": "user", "content": true_prompt}
-            ]})
+                {"role": "user", "content": true_prompt}, ],
+                "max_rewrite"                             : 3,
+                "rewrite_count"                           : 0,
+            }, config)
             context = response["messages"][-1].content
             enriched.append({
-                "question"        : stem.question,
-                "knowledge_points": stem.knowledge_points,
-                "context"         : context
+                "question": {
+                    "question"        : stem.question,
+                    "knowledge_points": stem.knowledge_points
+                },
+                "context" : context
             })
         return enriched
 
@@ -184,20 +229,71 @@ async def generate_all_answers(state: QuizState, config) -> Dict:
     true_or_false_stems_ctx = await enrich_with_context(true_or_false_stems)
 
     prompt = "请根据每道题的题干和检索到的相关内容生成答案，输出 JSON，包含 choice_questions、short_questions、true_or_false_questions 三个字段：\n"
-    prompt += "choice_questions: 每个元素包含 question, context, answer（正确选项）, distractors（3个干扰项）所有选项（包括正确答案和干扰项）应简洁明了，长度和风格尽量一致。正确答案只需准确表达核心意思，不要包含过多细节或修饰。\n"
-    prompt += "short_questions: 每个元素包含 question, context, reference_answer\n"
-    prompt += "true_or_false_questions: 每个元素包含 question, context, answer（True/False）\n"
+    prompt += "choice_questions: 每个元素包含 question, answer（正确选项）, distractors（3个干扰项）所有选项（包括正确答案和干扰项）应简洁明了，长度和风格尽量一致。正确答案只需准确表达核心意思，不要包含过多细节或修饰。\n"
+    prompt += "short_questions: 每个元素包含 question, reference_answer\n"
+    prompt += "true_or_false_questions: 每个元素包含 question, answer（True/False）\n"
 
     prompt += "\n【选择题】\n"
     for idx, x in enumerate(choice_stems_ctx):
-        prompt += f"{idx + 1}. 题干：{x['question']}，知识点：{', '.join(x['knowledge_points'])}\n相关内容：{x['context']}\n"
+        prompt += f"{idx + 1}. 题干：{x['question']['question']}，知识点：{', '.join(x['question']['knowledge_points'])}\n相关内容：{x['context']}\n"
     prompt += "\n【简答题】\n"
     for idx, x in enumerate(short_stems_ctx):
-        prompt += f"{idx + 1}. 题干：{x['question']}，知识点：{', '.join(x['knowledge_points'])}\n相关内容：{x['context']}\n"
+        prompt += f"{idx + 1}. 题干：{x['question']['question']}，知识点：{', '.join(x['question']['knowledge_points'])}\n相关内容：{x['context']}\n"
     prompt += "\n【是非题】\n"
     for idx, x in enumerate(true_or_false_stems_ctx):
-        prompt += f"{idx + 1}. 题干：{x['question']}，知识点：{', '.join(x['knowledge_points'])}\n相关内容：{x['context']}\n"
+        prompt += f"{idx + 1}. 题干：{x['question']['question']}，知识点：{', '.join(x['question']['knowledge_points'])}\n相关内容：{x['context']}\n"
+    prompt = f"""你是一个专业的出题专家。你的任务是根据提供的题干和相关内容，生成答案和干扰项。
+你必须严格按照下面的JSON结构输出，不要包含任何额外的解释或文字。
+### JSON 输出结构
+```json
+{{
+  "choice_questions": [
+    {{
+      "question": {{
+        "question": "<字符串 - 问题题干>",
+        "knowledge_points": ["<字符串 - 知识点>"]
+      }},
+      "answer": "<字符串 - 正确答案>",
+      "distractors": ["<字符串 - 干扰项1>", "<字符串 - 干扰项2>", "<字符串 - 干扰项3>"]
+    }}
+  ],
+  "short_questions": [
+    {{
+      "question": {{
+        "question": "<字符串 - 问题题干>",
+        "knowledge_points": ["<字符串 - 知识点>"]
+      }},
+      "reference_answer": "<字符串 - 参考答案>"
+    }}
+  ],
+  "true_or_false_questions": [
+    {{
+      "question": {{
+        "question": "<字符串 - 问题题干>",
+        "knowledge_points": ["<字符串 - 知识点>"]
+      }},
+      "answer": <布尔值 - true 或 false, 不是字符串 "true" 或 "false">
+    }}
+  ]
+}}
+```
 
+### 输入数据
+这是用于生成测验的数据。每个问题都提供了题干和相关内容。
+
+
+#### 选择题
+{json.dumps(choice_stems_ctx, indent=2, ensure_ascii=False)}
+
+
+#### 简答题
+{json.dumps(short_stems_ctx, indent=2, ensure_ascii=False)}
+
+
+#### 是非题
+{json.dumps(true_or_false_stems_ctx, indent=2, ensure_ascii=False)}
+
+现在，请根据提供的输入数据生成最终的 json 输出。"""
     class AllAnswersWithContext(BaseModel):
         choice_questions: List[MultipleChoiceQuestion]
         short_questions: List[ShortAnswerQuestion]
