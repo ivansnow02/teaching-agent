@@ -5,7 +5,9 @@
   "graphs": {
     "lesson_planner": "./src/agent/lesson_plan_workflow.py:build_plan_workflow",
     "rag_agent": "./src/agent/rag_agent.py:make_graph",
-    "quiz_generator": "./src/agent/quiz_generator.py:build_quiz_workflow"
+    "quiz_generator": "./src/agent/quiz_generator.py:build_quiz_workflow",
+    "chapter_content_generator": "./src/agent/chapter_content_generator.py:build_lesson_planner",
+    "chapter_outline_generator": "./src/agent/chapter_outline_generator.py:build_chapter_graph"
   },
   "env": ".env",
   "http": {
