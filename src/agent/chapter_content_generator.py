@@ -11,7 +11,7 @@ from langgraph.graph import StateGraph
 from pydantic import BaseModel, Field
 from sentence_transformers.cross_encoder.evaluation import classification
 
-from src.agent.tools import calculate_time, count_words, rag_tool
+from src.agent.tools import calculate_time, count_words, rag_tool, search
 
 
 class ConfigSchema(TypedDict):
@@ -203,7 +203,7 @@ async def execute_before_parallel_step(state: PlanExecutionState, config) -> Dic
 
 execution_agent = create_react_agent(
     model=executioner,
-    tools=[rag_tool, count_words, calculate_time],
+    tools=[rag_tool, count_words, calculate_time, search],
     prompt="你是一个教案撰写助手，负责执行教学计划中的步骤。提供的计划内容，撰写相应的任务并返回结果。确保内容至于教案有关，你需要运用rag_tool检索相关知识库，count_words计算生成字数，calculate_time计算内容教授所需时间。\n\n",
 )
 
