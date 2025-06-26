@@ -67,10 +67,11 @@ class LessonPlanState(TypedDict):
     """
     # 初始输入
     raw_syllabus: str
-    # knowledge_base_retriever: Any # 在真实场景中你会传入你的检索器
-    num_choice_questions: int  # 需要生成的选择题数量
-    num_short_answer_questions: int  # 需要生成的简答题数量
-    num_true_or_false_questions: int  # 需要生成的是非题数量
+
+
+    # num_choice_questions: int  # 需要生成的选择题数量
+    # num_short_answer_questions: int  # 需要生成的简答题数量
+    # num_true_or_false_questions: int  # 需要生成的是非题数量
 
     # 中间处理数据
     parsed_syllabus: List[Dict]

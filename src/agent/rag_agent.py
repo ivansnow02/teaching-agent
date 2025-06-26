@@ -1,4 +1,5 @@
 """LangGraph agent with RAG tools."""
+
 import os
 from typing import Literal, TypedDict
 
@@ -26,7 +27,9 @@ response_model = init_chat_model(
     api_key=os.getenv("DASH_SCOPE_API_KEY", ""),
     # rate_limiter=rate_limiter,
     extra_body={"enable_thinking": False},
-    base_url=os.getenv("DASH_SCOPE_API_URL", "https://dashscope.aliyuncs.com/compatible-mode/v1"),
+    base_url=os.getenv(
+        "DASH_SCOPE_API_URL", "https://dashscope.aliyuncs.com/compatible-mode/v1"
+    ),
 )
 
 
@@ -46,9 +49,11 @@ async def generate_query_or_respond(state: RAGState, config):
     print("Generating query or responding...")
     course_id = config.get("configurable", {}).get("course_id", None)
     if course_id is None:
-        raise ValueError("User ID must be provided in the config.")
+        raise ValueError("Course ID must be provided in the config.")
     retriever_tool = await get_rag_tools(course_id)
-    response = await response_model.bind_tools(retriever_tool).ainvoke(state["messages"])
+    response = await response_model.bind_tools(retriever_tool).ainvoke(
+        state["messages"]
+    )
     return {"messages": [response]}
 
 
@@ -67,13 +72,15 @@ grader_model = init_chat_model(
     extra_body={"enable_thinking": False},
     api_key=os.getenv("DASH_SCOPE_API_KEY", ""),
     # rate_limiter=rate_limiter,
-    base_url=os.getenv("DASH_SCOPE_API_URL", "https://dashscope.aliyuncs.com/compatible-mode/v1"),
+    base_url=os.getenv(
+        "DASH_SCOPE_API_URL", "https://dashscope.aliyuncs.com/compatible-mode/v1"
+    ),
 )
 
 
 def grade_documents(
-        state: RAGState,
-        config,
+    state: RAGState,
+    config,
 ) -> Literal["generate_answer", "rewrite_question"]:
     rewrite_count = state["rewrite_count"]
     max_rewrite = state["max_rewrite"]
@@ -84,11 +91,8 @@ def grade_documents(
     context = state["messages"][-1].content
 
     prompt = GRADE_PROMPT.format(question=question, context=context)
-    response = (
-        grader_model
-        .with_structured_output(GradeDocuments).invoke(
-            [{"role": "user", "content": prompt}]
-        )
+    response = grader_model.with_structured_output(GradeDocuments).invoke(
+        [{"role": "user", "content": prompt}]
     )
     score = response.relevant
 
@@ -107,7 +111,7 @@ def rewrite_question(state: RAGState, config):
     response = response_model.invoke([{"role": "user", "content": prompt}])
 
     return {
-        "messages"     : [{"role": "user", "content": response.content}],
+        "messages": [{"role": "user", "content": response.content}],
         "rewrite_count": rewrite_count + 1,
     }
 

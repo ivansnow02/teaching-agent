@@ -10,6 +10,8 @@ import dotenv
 from src.agent.lesson_plan_workflow import build_plan_workflow
 from src.agent.quiz_generator import build_quiz_workflow
 from src.agent.rag_agent import make_graph
+from src.agent.chapter_content_generator import build_lesson_planner
+from src.agent.chapter_outline_generator import build_chapter_graph
 
 dotenv.load_dotenv()
 
@@ -19,4 +21,6 @@ __all__ = [
     "build_plan_workflow",
     "make_graph",
     "build_quiz_workflow",
+    "build_lesson_planner",
+    "build_chapter_graph",
 ]
