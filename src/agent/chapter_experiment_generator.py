@@ -10,7 +10,7 @@ from langgraph.constants import END
 from langgraph.graph import StateGraph
 from pydantic import BaseModel, Field
 
-from src.agent.tools import calculate_time, count_words, rag_tool
+from src.agent.tools import calculate_time, count_words, rag_tool, search
 
 
 class ConfigSchema(TypedDict):
@@ -83,8 +83,9 @@ async def plan_step(state: PlanExecutionState, config) -> Dict:
     """
 
     prompt = f"""
-你是一个教案生成专家。请将以下用户提供的教学大纲，转化为一个清晰、分步的教案撰写计划。
-每个步骤应该是一个独立的、可执行的任务，确保内容只与教案相关。
+你是一个实训课教案生成专家。请根据以下信息生成实训课教案的步骤。
+你需要根据课程大纲和实训课的要求，生成一个详细的教案步骤列表。
+每个步骤都应该是一个字符串，描述了要执行的操作，按照顺序排列。
 
 大纲:
 ---
@@ -122,8 +123,8 @@ executioner = init_chat_model(
 
 execution_agent = create_react_agent(
     model=executioner,
-    tools=[rag_tool, count_words, calculate_time],
-    prompt="你是一个教案撰写助手，负责执行教学计划中的步骤。提供的计划内容，撰写相应的任务并返回结果。确保内容至于教案有关，你需要运用rag_tool检索相关知识库，count_words计算生成字数，calculate_time计算内容教授所需时间。\n\n",
+    tools=[rag_tool, search],
+    prompt="你是实训课教案撰写助手，负责执行教学计划中的步骤。提供的计划内容，撰写相应的任务并返回结果。确保内容至于教案有关，你需要运用rag_tool检索相关知识库，search搜索未知资料。\n\n",
 )
 
 
@@ -151,9 +152,8 @@ async def replan_step(state: PlanExecutionState, config) -> Dict:
     """
 
     prompt = f"""
-你是一个教案生成专家。请根据以下信息重新规划教案。
-你只能在需要时添加新的步骤，而不是修改或删除现有步骤。
-确保步骤专注于教案的生成，而不是其他任务。
+你是一个实训课教案生成专家。请根据以下信息重新规划实训课教案的步骤。
+你需要根据当前的进展和剩余的计划，生成一个详细的教案步骤列表。
 
 **原始目标**:
 {state['raw_syllabus']}
@@ -164,10 +164,27 @@ async def replan_step(state: PlanExecutionState, config) -> Dict:
 **剩余的计划**:
 {state["plan"] or 'null'}
 
-**决策时间**:
-请严格按照以下JSON格式进行响应，不要包含任何其他文本。
-{Act.model_json_schema()}
-请根据当前进展更新你的计划。如果不再需要更多步骤并且可以直接回复用户，请直接返回结果。否则，请填写接下来的计划。只需添加仍需完成的步骤，不要将已完成的步骤再次作为计划返回。
+请严格按照以下二选一的 JSON 格式输出，不要包含任何多余内容，不要加代码块标记：
+
+1. 如果还需要继续生成计划，返回：
+{{
+  "action": {{
+    "steps": [
+      "步骤1",
+      "步骤2"
+    ]
+  }}
+}}
+
+2. 如果可以直接回复用户，返回：
+{{
+  "action": {{
+    "response": "你的最终答复内容"
+  }}
+}}
+
+只允许上述两种格式，且字段名必须完全一致。
+不要返回已经完成的步骤，只需返回新的步骤或最终答复内容。
 """
 
     structured_llm = planner.with_structured_output(Act)
@@ -185,7 +202,7 @@ def should_end(state: PlanExecutionState):
         return "agent"
 
 
-def build_lesson_planner():
+def build_experiment_planner():
     workflow = StateGraph(PlanExecutionState, ConfigSchema)
     workflow.add_node("planner", plan_step)
     workflow.add_node("agent", execute_step)

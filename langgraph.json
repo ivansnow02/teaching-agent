@@ -7,7 +7,9 @@
     "rag_agent": "./src/agent/rag_agent.py:make_graph",
     "quiz_generator": "./src/agent/quiz_generator.py:build_quiz_workflow",
     "chapter_content_generator": "./src/agent/chapter_content_generator.py:build_lesson_planner",
-    "chapter_outline_generator": "./src/agent/chapter_outline_generator.py:build_chapter_graph"
+    "chapter_outline_generator": "./src/agent/chapter_outline_generator.py:build_chapter_graph",
+    "code_agent": "./src/agent/code_agent.py:build_code_agent",
+    "experiment_planner": "./src/agent/chapter_experiment_generator.py:build_experiment_planner"
   },
   "env": ".env",
   "http": {
