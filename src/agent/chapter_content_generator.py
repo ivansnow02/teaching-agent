@@ -11,7 +11,15 @@ from langgraph.graph import StateGraph
 from pydantic import BaseModel, Field
 from sentence_transformers.cross_encoder.evaluation import classification
 
-from src.agent.tools import calculate_time, count_words, get_math_tool, rag_tool, search
+from src.agent.tools import (
+    calculate_time,
+    code_generate_tool,
+    code_validate_tool,
+    count_words,
+    get_math_tool,
+    rag_tool,
+    search,
+)
 
 
 class ConfigSchema(TypedDict):
@@ -244,11 +252,21 @@ math_tool = get_math_tool(
 )
 execution_agent = create_react_agent(
     model=executioner,
-    tools=[rag_tool, count_words, calculate_time, search, math_tool],
+    tools=[
+        rag_tool,
+        count_words,
+        calculate_time,
+        search,
+        math_tool,
+        code_generate_tool,
+        code_validate_tool,
+    ],
     prompt="""你是教案撰写助手，负责根据教学计划中的每个步骤，生成详细、连贯且可操作的教案内容。
 请确保每个步骤内容详实、逻辑清晰，便于教师和学生直接参考。
 如遇专业知识点或不确定内容，优先调用 rag_tool 检索知识库，必要时使用 search 搜索外部资料。
 如涉及数学或计算问题，可调用 math_tool 进行辅助。
+如涉及代码生成问题，可调用 code_generate_tool 进行辅助。
+如涉及代码验证问题，可调用 code_validate_tool 进行辅助。
 输出内容应聚焦于教学本身，避免涉及管理流程或平台操作。
 需使用 markdown 标题（### 步骤名）表明当前步骤，标题应简短明了。
 正文用简洁明了的语言，适当包含代码示例、注意事项或操作要点。

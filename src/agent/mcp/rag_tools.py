@@ -5,6 +5,9 @@ import os
 import httpx
 from mcp.server.fastmcp import FastMCP
 
+from typing import Literal, Optional
+from pydantic import BaseModel
+
 # ---
 # 全局变量来存储 RAG URL 和 Authorization Token
 # 默认值
@@ -14,141 +17,82 @@ COURSE_ID: str = ""
 
 mcp = FastMCP("Light RAG", "0.1.0")
 
-async def query_knowledge_base(query: str, search_mode: str = "mix") -> str:
-    """Query the RAG knowledge base to retrieve relevant information.
 
-    Args:
-        query: The question or query to search for
-        search_mode: Search mode - "default", "naive", "local", "global", "hybrid", "mix"
-            - "local": Focuses on context-dependent information.
-            - "global": Utilizes global knowledge.
-            - "hybrid": Combines local and global retrieval methods.
-            - "naive": Performs a basic search without advanced techniques.
-            - "mix": Integrates knowledge graph and vector retrieval.
+class QueryParams(BaseModel):
+    query: str
+    mode: Literal["local", "global", "hybrid", "naive", "mix", "bypass"] = "global"
+    only_need_context: bool = False
+    only_need_prompt: bool = False
+    response_type: str = "Multiple Paragraphs"
+    top_k: int = 10
+    max_token_for_text_unit: int = 4000
+    max_token_for_global_context: int = 4000
+    max_token_for_local_context: int = 4000
 
-    Returns:
-        Answer based on the knowledge base
+
+async def query_knowledge_base(params: QueryParams) -> str:
     """
-    body = {
-        "mode": search_mode,
-        "query": query,
-        "stream": False,
-        "response_type": "Multiple Paragraphs",
-        "top_k": 10,
-        "max_token_for_text_unit": 4000,
-        "max_token_for_global_context": 4000,
-        "max_token_for_local_context": 4000,
-        "only_need_context": False,
-        "only_need_prompt": False,
-    }
-
+    更灵活的知识库查询工具，支持多种检索模式和自定义参数。
+    """
+    body = params.model_dump()
+    query = body.pop("query")
     try:
         async with httpx.AsyncClient(timeout=30.0) as client:
-            # 将 headers 传递给 httpx 请求
-            response = await client.post(f"{RAG_URL}/query/{COURSE_ID}", json=body)
+            response = await client.post(
+                f"{RAG_URL}/query/{COURSE_ID}", json=body | {"query": query}
+            )
             response.raise_for_status()
             return response.text
-    except httpx.HTTPStatusError as e:
-        print(f"HTTP error: {e.response.status_code} {e.response.text}")
-        raise
-    except httpx.ReadTimeout:
-        print("Request timed out. Please check if the RAG service is running and responsive.")
+    except Exception as e:
+        logging.error(f"RAG 查询失败: {e}")
         raise
 
 
-@mcp.tool()
-async def query_mix_retrieval(query: str) -> str:
-    """
-    查询知识库 (混合检索模式)
-
-    使用混合检索模式查询知识库，整合知识图谱和向量检索技术，获取最全面的结果。
-
-    Args:
-        query (str): 要查询的问题或关键词
-
-    Returns:
-        str: 知识库中的答案
-    """
-    return await query_knowledge_base(query, "mix")
-
-
-@mcp.tool()
-async def query_local_retrieval(query: str) -> str:
-    """
-    查询知识库 (本地检索模式)
-
-    使用本地检索模式查询知识库，专注于检索上下文相关的信息。
-
-    Args:
-        query (str): 要查询的问题或关键词
-
-    Returns:
-        str: 知识库中的答案
-    """
-    return await query_knowledge_base(query, "local")
-
-
-@mcp.tool()
-async def query_global_retrieval(query: str) -> str:
-    """
-    查询知识库 (全局检索模式)
-
-    使用全局检索模式查询知识库，利用全局知识进行检索。
-
-    Args:
-        query (str): 要查询的问题或关键词
-
-    Returns:
-        str: 知识库中的答案
-    """
-    return await query_knowledge_base(query, "global")
-
-
-@mcp.tool()
-async def query_hybrid_retrieval(query: str) -> str:
-    """
-    查询知识库 (混合本地和全局检索模式)
-
-    使用混合检索模式查询知识库，结合本地和全局检索方法获取更全面的结果。
-
-    Args:
-        query (str): 要查询的问题或关键词
-
-    Returns:
-        str: 知识库中的答案
-    """
-    return await query_knowledge_base(query, "hybrid")
-
-
-@mcp.tool()
-async def query_naive_retrieval(query: str) -> str:
-    """
-    查询知识库 (简单检索模式)
-
-    使用简单检索模式查询知识库，执行基础搜索而不使用高级技术。
-
-    Args:
-        query (str): 要查询的问题或关键词
-
-    Returns:
-        str: 知识库中的答案
-    """
-    return await query_knowledge_base(query, "naive")
+# 用法示例
+# params = QueryParams(query="什么是向量检索？", mode="mix", only_need_context=True)
+# await query_knowledge_base(params)
+@mcp.tool(
+    name="rag_tool",
+    description="""
+查询知识库的工具，支持多种检索模式和自定义参数。
+参数：
+- query: 查询内容
+- mode: 检索模式，支持 local、global、hybrid、naive、mix 和 bypass，local 模式专注于上下文相关的检索，global模式则关注全局知识的检索，hybrid 模式结合了local和global，naive使用简单的向量检索，mix 混合graph和向量检索。
+- only_need_context: 仅返回上下文信息
+- only_need_prompt: 仅返回提示词信息
+- response_type: 返回的响应类型，支持 Multiple Paragraphs、Single Paragraph、Bullet Points
+- top_k: 返回结果的数量
+""",
+)
+async def query_rag_tool(
+    query: str,
+    mode: Literal["local", "global", "hybrid", "naive", "mix", "bypass"] = "mix",
+    only_need_context: bool = False,
+    only_need_prompt: bool = False,
+    response_type: str = "Multiple Paragraphs",
+    top_k: int = 10,
+) -> str:
+    params = QueryParams(
+        query=query,
+        mode=mode,
+        only_need_context=only_need_context,
+        only_need_prompt=only_need_prompt,
+        response_type=response_type,
+        top_k=top_k,
+    )
+    return await query_knowledge_base(params)
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Run the Light RAG MCP server.")
     parser.add_argument(
-        "--course-id",
-        type=str,
-        default=None,
-        help="Course id for the RAG service."
+        "--course-id", type=str, default=None, help="Course id for the RAG service."
     )
     parser.add_argument(
         "--rag-url",
         type=str,
         default=None,  # 将默认值改为 None，以便优先使用环境变量或命令行参数
-        help="URL of the RAG service. Defaults to http://localhost:9621/api if not set. Can also be set via RAG_URL environment variable."
+        help="URL of the RAG service. Defaults to http://localhost:9621/api if not set. Can also be set via RAG_URL environment variable.",
     )
 
     args = parser.parse_args()
@@ -165,6 +109,7 @@ if __name__ == "__main__":
         COURSE_ID = args.course_id
     else:
         logging.error(
-            "COURSE ID must be provided either as a command line argument or through the COURSE_ID environment variable.")
+            "COURSE ID must be provided either as a command line argument or through the COURSE_ID environment variable."
+        )
 
-    mcp.run(transport='stdio')
+    mcp.run(transport="stdio")

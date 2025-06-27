@@ -7,6 +7,7 @@
 - **章节课件生成器**：用于生成每个章节的详细课件内容
 - **RAG代理 (RAG Agent)**: 基于检索增强生成的上下文问答
 - **实训内容生成器**：用于生成实训环节的详细内容
+- **测验生成器**：用于生成课程相关的测验题目
 
 ### 光是调试的话
 
@@ -322,3 +323,209 @@ POST /threads
   "response": "### 安装图形开发所需的集成开发环境（IDE）\n\n#### 1. 选择适合的 IDE\n根据你的操作系统（Windows、macOS 或 Linux），选择一个适合图形开发的 IDE。常见的图形开发 IDE 包括：\n\n- **Visual Studio Code (VSCode)**：轻量级，支持多种编程语言，插件丰富。\n- **Eclipse**：适用于 Java 开发，有图形界面插件。\n- **Qt Creator**：专为 Qt ……"
 }
 ```
+
+## 测验题生成 (Quiz Generator)
+
+### 创建Assistant
+
+POST /assistants
+
+```json
+{
+    "graph_id": "quiz_planner_v2", // 测验题生成器
+    "config": {
+        "configurable":{
+            "course_id": "课程id"
+        }
+    }
+}
+```
+
+### 创建Thread
+
+POST /threads
+
+最简单的配置就是直接空就好了
+
+```json
+{}
+```
+
+### 创建Run
+
+建议用**创建后台运行的run**
+
+/threads/{thread_id}/runs
+
+```json
+{
+    "assistant_id": "xxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx",
+    "input": {
+        "requirements": "关于计算机图形学的二维图像生成，3道单选，2道多选，3道简答，30%简单题，40%中等题，30%难题"
+    }
+}
+```
+
+轮询 /threads/{thread_id}/runs/{run_id}
+
+```json
+{
+  "run_id": "xxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx",
+  "thread_id": "xxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx",
+  "assistant_id": "xxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx",
+  "metadata": {
+    "graph_id": "quiz_planner_v2",
+    "assistant_id": "xxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
+  },
+  "status": "pending",
+  "kwargs": {
+    "input": {
+      "requirements": "关于计算机图形学的二维图像生成，3道单选，2道多选，3道简答，30%简单题，40%中等题，30%难题"
+    },
+    "command": null
+  }
+}
+```
+
+当status变成success时，使用加入Run（获取结果） quiz即为生成的问题列表。
+
+**返回结果**
+
+```json
+{
+  "requirements": "关于计算机图形学的二维图像生成，3道单选，2道多选，3道简答，30%简单题，40%中等题，30%难题",
+  "plan": {
+    "questions": [
+      {
+        "questionType": "single_choice",
+        "knowledgePoints": "像素操作,图像增强",
+        "difficulty": "easy"
+      },
+……
+      {
+        "questionType": "short_answer",
+        "knowledgePoints": "渲染与着色的关系",
+        "difficulty": "hard"
+      }
+    ]
+  },
+  "single_questions_plan": {
+    "questions": [
+      {
+        "questionType": "single_choice",
+        "knowledgePoints": "像素操作,图像增强",
+        "difficulty": "easy"
+……
+      }
+    ]
+  },
+  "multiple_questions_plan": {
+    "questions": [
+      {
+        "questionType": "multiple_choice",
+        "knowledgePoints": "渲染技术,光照效果",
+        "difficulty": "medium"
+      },
+ ……
+    ]
+  },
+  "short_answer_questions_plan": {
+    "questions": [
+      {
+        "questionType": "short_answer",
+        "knowledgePoints": "图像处理核心概念",
+        "difficulty": "medium"
+      },
+ ……
+    ]
+  },
+  "quiz": [
+    {
+      "questionType": "single_choice",
+      "questionText": "以下哪种操作属于图像增强的范畴？",
+      "difficulty": "easy",
+      "options": [
+        {
+          "optionLabel": "A",
+          "optionText": "将图像转换为灰度图",
+          "optionOrder": 1,
+          "isCorrect": false
+        },
+        {
+          "optionLabel": "B",
+          "optionText": "调整图像的亮度和对比度",
+          "optionOrder": 2,
+          "isCorrect": true
+        },
+        {
+          "optionLabel": "C",
+          "optionText": "对图像进行像素点访问",
+          "optionOrder": 3,
+          "isCorrect": false
+        },
+        {
+          "optionLabel": "D",
+          "optionText": "将图像保存为不同格式",
+          "optionOrder": 4,
+          "isCorrect": false
+        }
+      ],
+      "correctAnswer": "B",
+      "answerExplanation": "调整图像的亮度和对比度是图像增强的一种基本操作，旨在改善图像的视觉效果。"
+    },
+……
+    {
+      "questionType": "multiple_choice",
+      "questionText": "在渲染技术中，以下哪些方法常用于处理光照效果？",
+      "difficulty": "medium",
+      "options": [
+        {
+          "optionLabel": "A",
+          "optionText": "光线追踪（Ray Tracing）",
+          "optionOrder": 1,
+          "isCorrect": true
+        },
+        {
+          "optionLabel": "B",
+          "optionText": "Z-Buffer（深度缓冲）",
+          "optionOrder": 2,
+          "isCorrect": true
+        },
+        {
+          "optionLabel": "C",
+          "optionText": "LOD（Level of Detail）",
+          "optionOrder": 3,
+          "isCorrect": false
+        },
+        {
+          "optionLabel": "D",
+          "optionText": "纹理映射（Texture Mapping）",
+          "optionOrder": 4,
+          "isCorrect": true
+        }
+      ],
+      "correctAnswer": "A,B,D",
+      "answerExplanation": "光线追踪用于模拟真实光照路径，Z-Buffer用于解决可见性问题并优化光照计算，而纹理映射则通过贴图增强光照表现力。LOD主要用于控制模型复杂度，而非直接处理光照效果。"
+    },
+ ……
+    {
+      "questionType": "short_answer",
+      "questionText": "简述图像处理的基本步骤及其各自的作用。",
+      "difficulty": "medium",
+      "options": [],
+      "correctAnswer": "图像处理的基本步骤包括：1. 图像获取，即通过设备捕获或生成数字图像；2. 图像增强，改善图像的视觉效果或突出感兴趣区域；3. 图像去噪，去除图像中的随机噪声以提高质量；4. 图像分割，将图像划分为多个具有特定语义的部分或对象；5. 特征提取，识别并提取图像中可用于分析的关键特征；6. 图像识别与理解，对图像内容进行解释和分类。这些步骤通常根据具体应用需求组合使用。",
+      "answerExplanation": "图像处理流程从获取图像开始，经过增强、去噪、分割等环节，最终实现特征提取和图像识别，每个步骤在不同应用中可能有所侧重。"
+    },
+ ……
+  ]
+}
+```
+
+**字段说明**
+
+- requirements: 用户输入的出题需求描述。
+- plan: 题目生成计划，包含每道题的类型、知识点、难度。
+- single_questions_plan / multiple_questions_plan / short_answer_questions_plan: 按题型分类的题目生成计划。
+- quiz: 生成的测验题目列表，每题包含题型、题干、难度、选项、正确答案、答案解析等字段。
+
+如需自定义题目数量、难度分布、知识点等，可在 requirements 字段中详细描述。

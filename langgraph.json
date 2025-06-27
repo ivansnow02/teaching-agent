@@ -9,7 +9,8 @@
     "chapter_content_generator": "./src/agent/chapter_content_generator.py:build_lesson_planner",
     "chapter_outline_generator": "./src/agent/chapter_outline_generator.py:build_chapter_graph",
     "code_agent": "./src/agent/code_agent.py:build_code_agent",
-    "experiment_planner": "./src/agent/chapter_experiment_generator.py:build_experiment_planner"
+    "experiment_planner": "./src/agent/chapter_experiment_generator.py:build_experiment_planner",
+    "quiz_planner_v2": "./src/agent/quiz_generator_beta.py:build_quiz_planner_v2"
   },
   "env": ".env",
   "http": {
