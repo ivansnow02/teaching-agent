@@ -166,3 +166,5 @@ uv.lock
 .vscode/
 dickens/
 inputs/
+
+.DS_Store
