@@ -6,6 +6,7 @@
 - **章节目录生成器**：用于生成课程的章节目录。
 - **章节课件生成器**：用于生成每个章节的详细课件内容
 - **RAG代理 (RAG Agent)**: 基于检索增强生成的上下文问答
+- **实训内容生成器**：用于生成实训环节的详细内容
 
 ### 光是调试的话
 
@@ -203,7 +204,7 @@ POST /threads
 }
 ```
 
-当status变成success时，使用加入Run（获取结果） response.content即为结构化课件内容。
+当status变成success时，使用加入Run（获取结果） response即为结构化课件内容。
 
 **返回结果**
 
@@ -234,44 +235,12 @@ POST /threads
     ],
 
   ],
-  "response": {
-    "content": "### 教案：图形学中的数学基础知识教学方案\n\n---\n\n## 一、教案目标\n\n**教学目标**：\n学生能够理解并掌握计算机图形学中所涉及的数学基础知识，包括坐标系统、向量运算、矩阵变换、投影变换等内容，并具备将这些知识应用于实际问题的能力。\n\n---\n\n## 二、教学内容与安排\n\n### 第一部分：坐标系统的讲解（40分钟）\n\n#### 教学目标：\n1. 理解二维和三维坐标系的基本结构。\n2. 掌握齐次坐标的表示方法及其在几何变换中的作用。\n\n#### 教学内容：\n- **二维坐标系**：x轴与y轴构成平面坐标系，点用(x, y)表示。\n- **三维坐标系**：增加z轴，形成空间坐标系，点用(x, y, z)表示。\n- **齐次坐标**：引入额外维度，如(x, y, 1)或(x, y, z, 1)，用于统一处理平移、旋转、缩放等操作。\n\n#### 教学方法：\n- 图形演示法\n- 实例分析法\n- 板书/多媒体结合讲解\n\n#### 教学评估：\n- 提问互动\n- 坐标系绘制练习\n\n---\n\n### 第二部分：向量运算详解（30分钟）\n\n#### 教学目标：\n1. 掌握向量加减法的计算及几何意义。\n2. 理解点积与叉积的定义、公式及其应用。\n\n#### 教学内容：\n\n| 运算 | 公式 | 几何意义 |\n|------|------|----------|\n| 向量加法 | $ \\vec{a} + \\vec{b} = (a_x + b_x, a_y + b_y) $ | 表示两个方向的合成 |\n| 向量减法 | $ \\vec{a} - \\vec{b} = (a_x - b_x, a_y - b_y) $ | 表示从一点到另一点的方向 |\n| 点积 | $ \\vec{a} \\cdot \\vec{b} = a_x b_x + a_y b_y $ | 衡量两向量夹角的余弦值 |\n| 叉积 | $ \\vec{a} \\times \\vec{b} = |\\vec{a}||\\vec{b}| \\sin(\\theta) $ | 表示垂直于两向量的新向量 |\n\n#### 教学方法：\n- 黑板推导\n- 动画图解展示\n- 小组讨论与练习\n\n#### 教学评估：\n- 向量运算小测验\n- 向量应用案例分析\n\n---\n\n### 第三部分：矩阵变换（40分钟）\n\n#### 教学目标：\n1. 掌握基本的矩阵运算规则。\n2. 理解平移、旋转、缩放的矩阵表示形式及其在图形变换中的应用。\n\n#### 教学内容：\n\n| 变换类型 | 矩阵表示（2D） | 应用场景 |\n|----------|----------------|----------|\n| 平移     | $\\begin{bmatrix} 1 & 0 & t_x \\\\ 0 & 1 & t_y \\\\ 0 & 0 & 1 \\end{bmatrix}$ | 改变物体位置 |\n| 缩放     | $\\begin{bmatrix} s_x & 0 & 0 \\\\ 0 & s_y & 0 \\\\ 0 & 0 & 1 \\end{bmatrix}$ | 调整大小 |\n| 旋转     | $\\begin{bmatrix} \\cos\\theta & -\\sin\\theta & 0 \\\\ \\sin\\theta & \\cos\\theta & 0 \\\\ 0 & 0 & 1 \\end{bmatrix}$ | 改变方向 |\n\n#### 教学方法：\n- 演示矩阵运算过程\n- 使用动画展示变换效果\n- 学生动手练习矩阵乘法\n\n#### 教学评估：\n- 矩阵变换作业题\n- 编程实现简单变换\n\n---\n\n### 第四部分：投影变换（30分钟）\n\n#### 教学目标：\n1. 理解正交投影与透视投影的区别。\n2. 掌握两种投影方式的数学表达形式。\n\n#### 教学内容：\n\n| 投影类型 | 数学表达 | 特点 |\n|----------|-----------|------|\n| 正交投影 | 不考虑距离变化，保持平行线不变 | 适用于工程制图 |\n| 透视投影 | 引入视点概念，近大远小 | 适用于真实感渲染 |\n\n**透视投影矩阵示例**（简化版）：\n$$\nP = \\begin{bmatrix}\n\\frac{2n}{r-l} & 0 & \\frac{r+l}{r-l} & 0 \\\\\n0 & \\frac{2n}{t-b} & \\frac{t+b}{t-b} & 0 \\\\\n0 & 0 & -\\frac{f+n}{f-n} & -\\frac{2fn}{f-n} \\\\\n0 & 0 & -1 & 0\n\\end{bmatrix}\n$$\n\n#### 教学方法：\n- 对比讲解+动画演示\n- 示例代码展示投影效果\n\n#### 教学评估：\n- 区分正交与透视投影的选择题\n- 编写投影变换程序片段\n\n---\n\n### 第五部分：图解与示例辅助教学（45分钟）\n\n#### 教学目标：\n通过图解、实例和可视化工具帮助学生更直观地理解抽象数学概念。\n\n#### 教学内容：\n- 向量图解：箭头表示方向与长度\n- 矩阵变换演示：图像随矩阵改变而变形\n- 投影图示：对比正交与透视效果差异\n\n#### 教学方法：\n- 使用GeoGebra、Desmos等动态软件演示\n- 展示实际游戏或图形引擎中的变换效果\n- 学生动手绘图练习\n\n#### 教学评估：\n- 根据图解回答问题\n- 绘图任务反馈\n\n---\n\n### 第六部分：课堂练习与课后作业（共约3小时）\n\n#### 课堂练习（75分钟）：\n1. **坐标系建模**：绘制不同坐标系下的三角形、立方体。\n2. **矩阵变换实验**：完成一次复合变换（先旋转再平移）。\n3. **光线追踪模拟**：使用向量与点积判断光线是否与球体相交。\n\n#### 课后作业（建议3.5小时）：\n1. **虚拟现实场景设计**：创建一个包含光照、物体移动的小型VR场景。\n2. **LOD技术实现**：编写程序根据视角距离切换模型细节层次。\n3. **重要性采样演示**：编写代码模拟基于概率密度函数的采样过程。\n\n#### 教学评估：\n- 课堂练习表现评分\n- 课后作业提交与代码审查\n\n---\n\n## 三、教学资源推荐\n\n- 教材：《计算机图形学基础》《线性代数》《高等数学》\n- 工具：OpenGL、Unity、Python Matplotlib、GeoGebra\n- 辅助材料：图解卡片、教学视频、代码模板\n\n---\n\n## 四、教学时间总览\n\n| 教学模块 | 时间分配 |\n|----------|----------|\n| 坐标系统 | 40分钟 |\n| 向量运算 | 30分钟 |\n| 矩阵变换 | 40分钟 |\n| 投影变换 | 30分钟 |\n| 图示辅助 | 45分钟 |\n| 课堂练习 | 75分钟 |\n| 总计     | **约4小时** |\n\n---\n\n## 五、教学反思与优化建议\n\n- **优点**：课程结构清晰，涵盖图形学核心数学内容；理论与实践结合紧密。\n- **改进方向**：\n  - 增加更多编程实操环节；\n  - 引入图形引擎API（如Unity、Three.js）进行实战演练；\n  - 针对不同基础的学生提供差异化练习。\n\n---\n\n**结语**：本教案旨在通过系统化的教学安排，帮助学生建立扎实的图形学数学基础，并能灵活运用于实际开发与项目实践中。",
-    "additional_kwargs": {
-      "refusal": null
-    },
-    "response_metadata": {
-      "token_usage": {
-        "completion_tokens": 1801,
-        "prompt_tokens": 2348,
-        "total_tokens": 4149,
-        "completion_tokens_details": null,
-        "prompt_tokens_details": null
-      },
-      "model_name": "qwen3-235b-a22b",
-      "system_fingerprint": null,
-      "id": "chatcmpl-ab1888b0-d9bc-9148-8686-b5c8b1e1507e",
-      "service_tier": null,
-      "finish_reason": "stop",
-      "logprobs": null
-    },
-    "type": "ai",
-    "name": null,
-    "id": "run--c5fb25a2-0040-47b5-a484-7bc5be1a082e-0",
-    "example": false,
-    "tool_calls": [],
-    "invalid_tool_calls": [],
-    "usage_metadata": {
-      "input_tokens": 2348,
-      "output_tokens": 1801,
-      "total_tokens": 4149,
-      "input_token_details": {},
-      "output_token_details": {}
-    }
-  }
+  "response": "### 教案：图形学中的数学基础知识教学方案\n\n---\n\n## 一、教案目标\n\n**教学目标**：\n学生能够理解并掌握计算机图形学中所涉及的数学基础知识，包括坐标系统、向量运算、矩阵变换、投影变换等内容，并具备将这些知识应用于实际问题的能力。\n\n---\n\n## 二、教…",
+  ……（省略其他内容）
 }
 ```
 
-## RAG代理 (RAG Agent)
+## 实训课实验步骤生成 (Chapter Experiment Generator)
 
 ### 创建Assistant
 
@@ -279,15 +248,14 @@ POST /assistants
 
 ```json
 {
-    "graph_id": "rag_agent", // 从rag_agent，quiz_generator或lesson_planner中选择
+    "graph_id": "chapter_experiment_generator", // 实训课实验步骤生成器
     "config": {
         "configurable":{
-            "course_id": "用户唯一标识符"
+            "course_id": "课程id"
         }
     }
 }
 ```
-
 
 ### 创建Thread
 
@@ -301,15 +269,56 @@ POST /threads
 
 ### 创建Run
 
-这个可以用流式
+建议用**创建后台运行的run**
+
+/threads/{thread_id}/runs
 
 ```json
 {
-    "assistant_id": "assistant_id", // assistant_id是上面创建的Assistant的ID
+    "assistant_id": "xxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx",
     "input": {
-    "messages": "tensorflow.js是什么",
-    "max_rewrite": 3,
-    "rewrite_count": 0
-  }
+        "raw_syllabus": "title:实训一：图形开发环境搭建,content:学习如何配置基本的图形开发环境，为后续实验奠定基础。"
+    }
+}
+```
+
+轮询 /threads/{thread_id}/runs/{run_id}
+**返回结果**
+```json
+{
+    "run_id": "xxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx",
+    "thread_id": "xxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx",
+    "assistant_id": "xxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx",
+    "metadata": {
+        "graph_id": "chapter_experiment_generator",
+        "assistant_id": "xxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
+    },
+    "status": "pending",
+    "kwargs": {
+        "input": {
+            "raw_syllabus": "title:实训一：图形开发环境搭建,content:学习如何配置基本的图形开发环境，为后续实验奠定基础。"
+        },
+        "command": null
+    }
+}
+```
+
+当status变成success时，使用加入Run（获取结果） response即为结构化实验步骤内容。
+
+**返回结果**
+
+```json
+{
+  "raw_syllabus": "\"title\": \"实验1: 图形开发环境搭建\",\n      \"content\": \"熟悉图形开发环境的搭建过程，为后续实验做好准备。\",\n      \"order\": 2,\n      \"type\": \"experiment\"\n    },",
+  "plan": [],
+  "past_steps": [
+    [
+      "安装图形开发所需的集成开发环境（IDE）。",
+      "### 安装图形开发所需的集成开发环境（IDE）\n\n#### 1. 选择适合的 ID0, 100]……",
+      "选择适合操作系统的图形开发 IDE（如 VSCode、Qt Creator 等），下载安装后配置必要插件和语言环境，安装对应图形库（如 Pygame 或 OpenGL），创建项目并编写基础图形代码进行验证。"
+    ],
+    ……（省略其他步骤）
+  ],
+  "response": "### 安装图形开发所需的集成开发环境（IDE）\n\n#### 1. 选择适合的 IDE\n根据你的操作系统（Windows、macOS 或 Linux），选择一个适合图形开发的 IDE。常见的图形开发 IDE 包括：\n\n- **Visual Studio Code (VSCode)**：轻量级，支持多种编程语言，插件丰富。\n- **Eclipse**：适用于 Java 开发，有图形界面插件。\n- **Qt Creator**：专为 Qt ……"
 }
 ```

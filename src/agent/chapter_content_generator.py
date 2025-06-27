@@ -11,7 +11,7 @@ from langgraph.graph import StateGraph
 from pydantic import BaseModel, Field
 from sentence_transformers.cross_encoder.evaluation import classification
 
-from src.agent.tools import calculate_time, count_words, rag_tool, search
+from src.agent.tools import calculate_time, count_words, get_math_tool, rag_tool, search
 
 
 class ConfigSchema(TypedDict):
@@ -32,7 +32,7 @@ class PlanExecutionState(TypedDict):
     # Annotated 用于为 past_steps 字段指定一个 reducer。
     # operator.add 会将新步骤附加到现有列表中，而不是替换它，
     # 这与 TypeScript 中的 (x, y) => x.concat(y) 行为相同。
-    past_steps: Annotated[List[Tuple[str, str]], operator.add]
+    past_steps: Annotated[List[Tuple[str, str, str]], operator.add]
 
     response: str
 
@@ -86,17 +86,24 @@ async def plan_step(state: PlanExecutionState, config) -> Dict:
     """
 
     prompt = f"""
-你是一个教案生成专家。请将以下用户提供的教学大纲，转化为一个清晰、分步的教案撰写计划。
-每个步骤应该是一个具体的操作，描述了要撰写的内容。
+你是一名资深教案设计专家。请根据以下课程大纲，生成一份详细、清晰、分步的教案撰写计划。
 
-大纲:
+要求如下：
+- 每个步骤应为一条具体且简明的教案撰写操作。
+- 步骤内容应聚焦于教学内容本身，不涉及管理流程、平台操作等非教学环节。
+- 步骤顺序合理，便于教师直接参考和执行。
+- 可省略过于简单的步骤，例如：设计课程标题、组织教学顺序、准备示例
+- 步骤要方便后续大模型生成，不要出现如“教师巡查”、“学生提问”等管理性描述。
+- 不需要出现练习题设计环节
+
+课程大纲:
 ---
 {state['raw_syllabus']}
 ---
 
-请输出计划步骤。
 请严格按照以下 JSON 格式输出，不要包含任何解释、注释或Markdown标记外的任何文本。
-{plan_schema}"""
+{plan_schema}
+"""
 
     structured_llm = planner.with_structured_output(Plan)
     try:
@@ -174,6 +181,22 @@ JSON 对象，格式如下：
     }
 
 
+async def summarize_step(detail: str) -> str:
+    prompt = f"请用一句话总结以下内容，突出关键知识点和教学要点：\n\n{detail}"
+    resp_llm = init_chat_model(
+        model="qwen3-14b",
+        model_provider="openai",
+        temperature=0,
+        extra_body={"enable_thinking": False},
+        api_key=os.getenv("DASH_SCOPE_API_KEY", ""),
+        base_url=os.getenv(
+            "DASH_SCOPE_API_URL", "https://dashscope.aliyuncs.com/compatible-mode/v1"
+        ),
+    )
+    result = await resp_llm.ainvoke(prompt)
+    return result.content.strip()
+
+
 async def execute_before_parallel_step(state: PlanExecutionState, config) -> Dict:
     """
     Execute a sequential step in the lesson plan.
@@ -187,24 +210,51 @@ async def execute_before_parallel_step(state: PlanExecutionState, config) -> Dic
 
     child_config = {"configurable": config.get("configurable", {})}
     task = before_parallel_plan[0]
+    completed_steps = (
+        [f"{step[0]}:\n\n{step[2]}" for step in state["past_steps"]]
+        if state["past_steps"]
+        else []
+    )
     task_formatted = f"""
 针对以下计划：{task}\n\n你需要执行此步骤：{task}。
 这是前面的历史步骤和结果：
-{state["past_steps"] or 'null'}
+{completed_steps or 'null'}
 """
     agent_response = await execution_agent.ainvoke(
         {"messages": [("user", task_formatted)]}, child_config
     )
+    detail = agent_response["messages"][-1].content
+    summary = await summarize_step(detail)
 
-    return {
-        "past_steps": [(task, agent_response["messages"][-1].content)],
-    }
+    return {"past_steps": [(task, detail, summary)]}
 
 
+math_tool = get_math_tool(
+    init_chat_model(
+        model="qwen2.5-coder-32b-instruct",
+        model_provider="openai",
+        temperature=0,
+        # extra_body={"enable_thinking": False},
+        api_key=os.getenv("DASH_SCOPE_API_KEY", ""),
+        base_url=os.getenv(
+            "DASH_SCOPE_API_URL",
+            "https://dashscope.aliyuncs.com/compatible-mode/v1",
+        ),
+    )
+)
 execution_agent = create_react_agent(
     model=executioner,
-    tools=[rag_tool, count_words, calculate_time, search],
-    prompt="你是一个教案撰写助手，负责执行教学计划中的步骤。提供的计划内容，撰写相应的任务并返回结果。确保内容至于教案有关，你需要运用rag_tool检索相关知识库，count_words计算生成字数，calculate_time计算内容教授所需时间。\n\n",
+    tools=[rag_tool, count_words, calculate_time, search, math_tool],
+    prompt="""你是教案撰写助手，负责根据教学计划中的每个步骤，生成详细、连贯且可操作的教案内容。
+请确保每个步骤内容详实、逻辑清晰，便于教师和学生直接参考。
+如遇专业知识点或不确定内容，优先调用 rag_tool 检索知识库，必要时使用 search 搜索外部资料。
+如涉及数学或计算问题，可调用 math_tool 进行辅助。
+输出内容应聚焦于教学本身，避免涉及管理流程或平台操作。
+需使用 markdown 标题（### 步骤名）表明当前步骤，标题应简短明了。
+正文用简洁明了的语言，适当包含代码示例、注意事项或操作要点。
+不需要出现练习题。
+如有必要，可补充背景知识或关键概念说明，但避免冗余。
+""",
 )
 
 import asyncio
@@ -223,20 +273,26 @@ async def execute_parallel_step(state: PlanExecutionState, config) -> Dict:
 
     child_config = {"configurable": config.get("configurable", {})}
     tasks = []
+    completed_steps = (
+        [f"{step[0]}:\n\n{step[2]}" for step in state["past_steps"]]
+        if state["past_steps"]
+        else []
+    )
     for task in parallel_plan:
-        task_formatted = f"""针对以下计划：{task}\n\n你需要执行此步骤：{task}。"""
-        tasks.append(
-            execution_agent.ainvoke(
+        task_formatted = f"""已完成内容：{completed_steps or 'null'}
+针对以下计划：{task}\n\n你需要执行此步骤：{task}。"""
+
+        async def run_with_summary(task=task, task_formatted=task_formatted):
+            result = await execution_agent.ainvoke(
                 {"messages": [("user", task_formatted)]}, child_config
             )
-        )
+            detail = result["messages"][-1].content
+            summary = await summarize_step(detail)
+            return (task, detail, summary)
 
-    results = await asyncio.gather(*tasks)
-    past_steps = [
-        (task, result["messages"][-1].content)
-        for task, result in zip(parallel_plan, results)
-    ]
+        tasks.append(run_with_summary())
 
+    past_steps = await asyncio.gather(*tasks)
     return {
         "past_steps": past_steps,
     }
@@ -255,101 +311,46 @@ async def execute_after_parallel_step(state: PlanExecutionState, config) -> Dict
 
     child_config = {"configurable": config.get("configurable", {})}
     task = after_parallel_plan[0]
+    completed_steps = (
+        [f"{step[0]}:\n\n{step[2]}" for step in state["past_steps"]]
+        if state["past_steps"]
+        else []
+    )
     task_formatted = f"""
 针对以下计划：{task}\n\n你需要执行此步骤：{task}。
 这是前面的历史步骤和结果：
-{state["past_steps"] or 'null'}
+{completed_steps or 'null'}
 """
     agent_response = await execution_agent.ainvoke(
         {"messages": [("user", task_formatted)]}, child_config
     )
+    detail = agent_response["messages"][-1].content
+    summary = await summarize_step(detail)
 
-    return {
-        "past_steps": [(task, agent_response["messages"][-1].content)],
-    }
-
-
-# async def execute_step(state: PlanExecutionState, config) -> Dict:
-#     child_config = {"configurable": config.get("configurable", {})}
-
-#     plan = state["plan"]
-#     plan_str = "\n".join(f"{i+1}. {step}" for i, step in enumerate(plan))
-#     task = plan[0]
-#     task_formatted = f"""针对以下计划：{plan_str}\n\n你需要执行第{1}步：{task}。"""
-#     agent_response = await execution_agent.ainvoke(
-#         {"messages": [("user", task_formatted)]}, child_config
-#     )
-#     return {
-#         "past_steps": [(task, agent_response["messages"][-1].content)],
-#     }
+    return {"past_steps": [(task, detail, summary)]}
 
 
-# async def replan_step(state: PlanExecutionState, config) -> Dict:
-#     """
-#     Replan the lesson plan based on the current state and configuration.
-#     :param state:
-#     :param config:
-#     :return:
-#     """
-
-#     prompt = f"""
-# 你是一个教案生成专家。请根据以下信息重新规划教案。
-# 你只能在需要时添加新的步骤，而不是修改或删除现有步骤。
-# 确保步骤专注于教案的生成，而不是其他任务。
-
-# **原始目标**:
-# {state['raw_syllabus']}
-
-# **已完成的步骤和结果**:
-# {state["past_steps"] or 'null'}
-
-# **剩余的计划**:
-# {state["sequential_plan"] or 'null'}
-
-# **决策时间**:
-# 请严格按照以下JSON格式进行响应，不要包含任何其他文本。
-# {Act.model_json_schema()}
-# 请根据当前进展更新你的计划。如果不再需要更多步骤并且可以直接回复用户，请直接返回结果。否则，请填写接下来的计划。只需添加仍需完成的步骤，不要将已完成的步骤再次作为计划返回。
-# """
-
-#     structured_llm = planner.with_structured_output(Act)
-#     result = await structured_llm.ainvoke(prompt)
-#     if isinstance(result.action, Response):
-#         return {"response": result.action.response}
-#     else:
-#         return {"plan": result.action.steps}
-
-
-# def should_end(state: PlanExecutionState):
-#     if "response" in state and state["response"]:
-#         return END
-#     else:
-#         return "execute_sequential_step"
+# writer = init_chat_model(
+#     model="deepseek-v3",
+#     model_provider="openai",
+#     temperature=0,
+#     # extra_body={"enable_thinking": False},
+#     api_key=os.getenv("DASH_SCOPE_API_KEY", ""),
+#     # rate_limiter=rate_limiter,
+#     base_url=os.getenv(
+#         "DASH_SCOPE_API_URL", "https://dashscope.aliyuncs.com/compatible-mode/v1"
+#     ),
+# )
 
 
 async def write_lesson_plan(state: PlanExecutionState, config) -> Dict:
     """
     Write the lesson plan based on all past steps
     """
-    past_steps = state["past_steps"]
-    if not past_steps:
-        return {"response": "没有可用的步骤来生成教案。"}
-
-    # 将所有步骤合并为一个字符串
-    steps_str = "\n".join(
-        f"{i+1}. {step[0]}: \n\n{step[1]}\n\n" for i, step in enumerate(past_steps)
-    )
-
-    prompt = f"""你是一个教案撰写专家。请根据以下步骤生成完整的教案内容
-
-{steps_str}
-请确保内容清晰、连贯，并符合教学目标，不要减少任何步骤或内容。
-"""
-
-    result = await planner.ainvoke(prompt)
-    return {
-        "response": result,
-    }
+    steps = state.get("past_steps", [])
+    # 只取详细内容部分
+    final_resp = "\n\n".join([f"{step[1]}" for step in steps])
+    return {"response": final_resp}
 
 
 def build_lesson_planner():
