@@ -222,3 +222,43 @@ def get_math_tool(llm):
 
 
 search = TavilySearch(max_results=2, description="搜索相关信息以回答问题。")
+
+
+@tool
+async def code_generate_tool(requirement: str, config: RunnableConfig) -> str:
+    """
+    代码生成工具，根据用户需求生成代码
+    :param requirement: 用户的代码需求描述
+    :param config: 配置参数
+    :return: 生成的代码
+    """
+    from src.agent.code_agent import build_code_generator
+
+    code_agent = build_code_generator()
+    response = await code_agent.ainvoke(
+        {
+            "messages": [{"role": "user", "content": requirement}],
+        },
+        config,
+    )
+    return response["messages"][-1].content
+
+
+@tool
+async def code_validate_tool(code: str, config: RunnableConfig) -> str:
+    """
+    代码验证工具，检查代码正确性并给出建议
+    :param code: 需要验证的代码
+    :param config: 配置参数
+    :return: 验证结果或建议
+    """
+    from src.agent.code_agent import build_code_validator
+
+    validator_agent = build_code_validator()
+    response = await validator_agent.ainvoke(
+        {
+            "messages": [{"role": "user", "content": code}],
+        },
+        config,
+    )
+    return response["messages"][-1].content
