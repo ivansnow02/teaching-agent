@@ -1,8 +1,10 @@
+import http
 import logging
 import math
 import re
 from typing import List, Optional
 
+import httpx
 import numexpr
 from langchain.chains.openai_functions import create_structured_output_runnable
 from langchain_core.messages import SystemMessage
@@ -262,3 +264,15 @@ async def code_validate_tool(code: str, config: RunnableConfig) -> str:
         config,
     )
     return response["messages"][-1].content
+
+
+# todo
+@tool
+async def get_stu_exam_status(config: RunnableConfig) -> str:
+    """
+    获取学生考试信息
+    :param config: 配置参数
+    :return: 学生考试状态
+    """
+
+    pass

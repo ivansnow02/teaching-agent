@@ -10,7 +10,8 @@
     "chapter_outline_generator": "./src/agent/chapter_outline_generator.py:build_chapter_graph",
     "code_agent": "./src/agent/code_agent.py:build_code_agent",
     "experiment_planner": "./src/agent/chapter_experiment_generator.py:build_experiment_planner",
-    "quiz_planner_v2": "./src/agent/quiz_generator_beta.py:build_quiz_planner_v2"
+    "quiz_planner_v2": "./src/agent/quiz_generator_beta.py:build_quiz_planner_v2",
+    "grade_agent": "./src/agent/batch_grading_agent.py:build_batch_grading_workflow"
   },
   "env": ".env",
   "http": {
