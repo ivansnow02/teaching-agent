@@ -12,6 +12,9 @@
     "grade_agent": "./src/agent/batch_grading_agent.py:build_batch_grading_workflow"
   },
   "env": ".env",
+  "auth": {
+    "path": "./src/agent/auth.py:auth"
+  },
   "http": {
     "app": "./src/agent/webapp.py:app"
   }
