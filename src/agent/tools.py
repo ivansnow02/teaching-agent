@@ -1,10 +1,12 @@
 import http
 import logging
 import math
+import os
 import re
 from typing import List, Optional
 
 import httpx
+from langchain.chat_models import init_chat_model
 import numexpr
 from langchain.chains.openai_functions import create_structured_output_runnable
 from langchain_core.messages import SystemMessage
@@ -266,13 +268,76 @@ async def code_validate_tool(code: str, config: RunnableConfig) -> str:
     return response["messages"][-1].content
 
 
-# todo
+BACKEND_BASE_URL = "http://127.0.0.1:8080/api/eduagentx"
+
+
 @tool
-async def get_stu_exam_status(config: RunnableConfig) -> str:
+async def get_stu_exam_status(stu_id: str, config: RunnableConfig) -> str:
     """
     获取学生考试信息
     :param config: 配置参数
     :return: 学生考试状态
     """
+    # /exam/statistics/student/{studentId}/course/{courseId}
 
-    pass
+    courseId = config.get("configurable", {}).get("courseId", None)
+
+    url = BACKEND_BASE_URL + f"/exam/statistics/student/{stu_id}/course/{courseId}"
+
+    user_info = config.get("configurable", {}).get("langgraph_auth_user", None)
+
+    auth_header = user_info.get("authorization", None)
+
+    headers = {
+        "Authorization": auth_header,
+        "Content-Type": "application/json",
+    }
+
+    resp = httpx.get(
+        url,
+        headers=headers,
+    )
+    if resp.status_code != http.HTTPStatus.OK:
+        raise ValueError(
+            f"Failed to get student exam status. Status code: {resp.status_code}, "
+            f"Response: {resp.text}"
+        )
+
+    prompt = f"""
+请根据以下学生考试历史数据，自动生成一段对该学生知识点掌握情况的评价，内容需包括整体表现、各章节掌握情况、存在的主要问题及改进建议，语言简明、客观、具体。
+
+【学生考试数据】
+{resp.data}
+
+【输出要求】
+- 先简要评价学生整体知识点掌握情况（如准确率、得分等）。
+- 指出各章节的掌握情况，突出薄弱章节。
+- 列举主要错误或易错题型，并分析原因。
+- 给出针对性的学习建议。
+
+请用中文输出评价内容。
+"""
+    llm = init_chat_model(
+        model="qwen3-30b-a3b",
+        model_provider="openai",
+        temperature=0,
+        extra_body={"enable_thinking": False},
+        api_key=os.getenv("DASH_SCOPE_API_KEY", ""),
+        # rate_limiter=rate_limiter,
+        base_url=os.getenv(
+            "DASH_SCOPE_API_URL", "https://dashscope.aliyuncs.com/compatible-mode/v1"
+        ),
+    )
+
+    response = await llm.ainvoke(
+        {
+            "messages": [{"role": "user", "content": prompt}],
+        },
+        config,
+    )
+
+    return (
+        response["messages"][-1].content.strip()
+        if response["messages"]
+        else "No response generated."
+    )
