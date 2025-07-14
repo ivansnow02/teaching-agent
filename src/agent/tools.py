@@ -275,6 +275,7 @@ BACKEND_BASE_URL = "http://127.0.0.1:8080/api/eduagentx"
 async def get_stu_exam_status(stu_id: str, config: RunnableConfig) -> str:
     """
     获取学生考试信息
+    :param stu_id: 学生ID
     :param config: 配置参数
     :return: 学生考试状态
     """

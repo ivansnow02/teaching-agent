@@ -1,9 +1,14 @@
 import asyncio
+from asyncio.log import logger
 import os
+from threading import local
 from typing import Dict, List, TypedDict
 
 from langchain.chat_models import init_chat_model
+from langchain_core.output_parsers import JsonOutputParser
 from langgraph.graph import END, StateGraph
+from langgraph.prebuilt import create_react_agent
+from src.agent.tools import get_stu_exam_status, search, rag_tool
 from pydantic import BaseModel, Field
 
 # --- 1. 常量与配置 ---
@@ -12,7 +17,6 @@ SCORE_DIFFERENCE_THRESHOLD = 0.2  # 分数差异阈值，超过此值则需要�
 # --- 2. Pydantic 模型定义 ---
 
 
-# todo: 增加agent调用ragtool
 class ConfigSchema(TypedDict):
     course_id: str
 
@@ -107,9 +111,28 @@ arbitrator_llm = init_chat_model(
 
 
 async def grade_answer(
-    question: Question, student_answer: StudentAnswer, reviewer_id: str, llm
+    question: Question, student_answer: StudentAnswer, reviewer_id: str, llm, config
 ) -> SingleGradingResult:
     prompt = f"""你是一位严谨、细致、公正的AI助教（角色：{reviewer_id}）。你的任务是根据提供的标准答案和解析，对学生的回答进行自动化批改和分析。
+
+**批改任务:**
+1.  **判断对错**: 确定学生的回答是否完全正确。
+2.  **给出分数**: 基于回答的正确性、完整性，给出一个在 [0.0, 1.0] 区间内的浮点数分数。
+3.  **错误定位**: 如果回答不完全正确，请精确、具体地指出每一个错误点。
+4.  **提供建议**: 针对每一个错误点，给出清晰、有建设性的修正建议。
+5.  **总体评价**: 给出一段综合性的评价。
+
+**使用工具:**
+- **get_stu_exam_status**: 获取学生的考试历史数据，帮助你更好地理解学生的知识点掌握情况。
+- **rag_tool**: 如果需要，可以使用RAG工具来获取更多上下文信息。
+- **search**: 如果rag_tool无法满足需求，可以使用搜索工具获取相关信息。
+
+**输出要求:** 必须严格按照以下JSON格式进行响应。
+```json
+{SingleGradingResult.model_json_schema()}
+```"""
+
+    quest = f"""
 
 **题目信息:**
 - **题干**: {question.questionText}
@@ -121,25 +144,38 @@ async def grade_answer(
 {student_answer.answer}
 ---
 
-**批改任务:**
-1.  **判断对错**: 确定学生的回答是否完全正确。
-2.  **给出分数**: 基于回答的正确性、完整性，给出一个在 [0.0, 1.0] 区间内的浮点数分数。
-3.  **错误定位**: 如果回答不完全正确，请精确、具体地指出每一个错误点。
-4.  **提供建议**: 针对每一个错误点，给出清晰、有建设性的修正建议。
-5.  **总体评价**: 给出一段综合性的评价。
+"""
+    grading_agent = create_react_agent(
+        model=llm, prompt=prompt, tools=[search, get_stu_exam_status, rag_tool]
+    )
 
-**输出要求:** 必须严格按照以下JSON格式进行响应。
-```json
-{SingleGradingResult.model_json_schema()}
-```"""
-    structured_llm = llm.with_structured_output(SingleGradingResult)
-    result = await structured_llm.ainvoke(prompt)
-    result.student_id = student_answer.student_id
-    result.reviewer = reviewer_id
+    # structured_llm = llm.with_structured_output(SingleGradingResult)
+    # result = await structured_llm.ainvoke(prompt)
+    raw_result = await grading_agent.ainvoke({"messages": [("user", quest)]}, config)
+    json_parser = JsonOutputParser()
+
+    try:
+        parsed = json_parser.parse(raw_result["messages"][-1].content)
+        if isinstance(parsed, dict):
+            result = SingleGradingResult(**parsed)
+        else:
+            result = parsed
+        result.student_id = student_answer.student_id
+        result.reviewer = reviewer_id
+    except Exception as e:
+        logger.error(f"解析批改结果失败: {e}")
+        result = SingleGradingResult(
+            student_id=student_answer.student_id,
+            is_correct=False,
+            score=0.0,
+            analysis="批改结果解析失败，请检查输入格式。",
+            errors=[],
+            reviewer=reviewer_id,
+        )
     return result
 
 
-async def initial_review_node(state: BatchGradingState) -> Dict:
+async def initial_review_node(state: BatchGradingState, config) -> Dict:
     question = Question.model_validate(state["question"])
     student_answers = [
         StudentAnswer.model_validate(sa) for sa in state["student_answers"]
@@ -147,8 +183,8 @@ async def initial_review_node(state: BatchGradingState) -> Dict:
     tasks = []
     for answer in student_answers:
         # 每个学生答案都由两位初评员并行批改
-        tasks.append(grade_answer(question, answer, "reviewer_A", reviewer_llm))
-        tasks.append(grade_answer(question, answer, "reviewer_B", reviewer_llm))
+        tasks.append(grade_answer(question, answer, "reviewer_A", reviewer_llm, config))
+        tasks.append(grade_answer(question, answer, "reviewer_B", reviewer_llm, config))
 
     results = await asyncio.gather(*tasks, return_exceptions=True)
 
@@ -162,7 +198,7 @@ async def initial_review_node(state: BatchGradingState) -> Dict:
     return {"review_results": review_results}
 
 
-async def arbitration_node(state: BatchGradingState) -> Dict:
+async def arbitration_node(state: BatchGradingState, config) -> Dict:
     question = Question.model_validate(state["question"])
     student_answers = [
         StudentAnswer.model_validate(sa) for sa in state["student_answers"]
@@ -183,6 +219,7 @@ async def arbitration_node(state: BatchGradingState) -> Dict:
                         student_answers_map[student_id],
                         "arbitrator",
                         arbitrator_llm,
+                        config,
                     )
                 )
 
