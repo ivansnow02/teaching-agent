@@ -48,6 +48,10 @@ async def generate_query_or_respond(state: RAGState, config):
     """
     print("Generating query or responding...")
     course_id = config.get("configurable", {}).get("course_id", None)
+    if "rewrite_count" not in state:
+        state["rewrite_count"] = 0
+    if "max_rewrite" not in state:
+        state["max_rewrite"] = 3
     if course_id is None:
         raise ValueError("Course ID must be provided in the config.")
     retriever_tool = await get_rag_tools(course_id)
